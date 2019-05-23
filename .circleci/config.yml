@@ -1,0 +1,23 @@
+version: 2
+jobs:
+  build:
+    machine: true
+    working_directory: ~/fs2-pubsub
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - ivy
+      - run: sbt ";project fs2-pubsub-core;set Global / patchVersion := Some(\"$CIRCLE_BUILD_NUM\");it:test;publish"
+      - save_cache:
+          key: ivy
+          paths:
+            - "~/.ivy2/cache"
+            - "~/.sbt"
+            - "~/.m2"
+workflows:
+  version: 2
+  build_and_test:
+    jobs:
+    - build:
+        context: prod
