@@ -48,11 +48,15 @@ class E2eSpec
     IO.contextShift(ExecutionContext.global)
 
   override def beforeAll(): Unit = {
-    startAllOrFail()
+    if(System.getenv("CIRCLECI").isEmpty) {
+      startAllOrFail()
+    }
   }
 
   override def afterAll(): Unit = {
-    stopAllQuietly()
+    if(System.getenv("CIRCLECI").isEmpty) {
+      stopAllQuietly()
+    }
   }
 
   case class Person(id: UUID, name: String, isFemale: Option[Boolean], kids: Seq[Person])
