@@ -1,7 +1,7 @@
 import sbt.configs
 
 lazy val root = (project in file("."))
-  .aggregate(`firestore-f`)
+  .aggregate(`fs2-firestore`)
 
 val majorVersion = SettingKey[String]("major version")
 val minorVersion = SettingKey[String]("minor version")
@@ -11,7 +11,7 @@ Global / majorVersion := "0"
 Global / minorVersion := "1"
 Global / patchVersion := Some("0")
 
-lazy val `firestore-f` = (project in file("core"))
+lazy val `fs2-firestore` = (project in file("core"))
   .configs(IntegrationTest)
   .settings(
     Common(),

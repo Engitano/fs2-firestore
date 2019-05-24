@@ -112,13 +112,6 @@ object ValueMarshaller extends LowPriorityMarshallers {
   }
 }
 
-trait SafeValue {
-  def v: Value
-  def vto: VTO
-  type VTO <: ValueTypeOneof
-}
-
-
 trait LowPriorityMarshallers {
 
   import Value.ValueTypeOneof._

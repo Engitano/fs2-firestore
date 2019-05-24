@@ -2,13 +2,13 @@ version: 2
 jobs:
   build:
     machine: true
-    working_directory: ~/fs2-pubsub
+    working_directory: ~/fs2-firestore
     steps:
       - checkout
       - restore_cache:
           keys:
             - ivy
-      - run: sbt ";project fs2-pubsub-core;set Global / patchVersion := Some(\"$CIRCLE_BUILD_NUM\");it:test;publish"
+      - run: sbt ";project fs2-firestore;set Global / patchVersion := Some(\"$CIRCLE_BUILD_NUM\");test;it:test;publish"
       - save_cache:
           key: ivy
           paths:
@@ -20,4 +20,4 @@ workflows:
   build_and_test:
     jobs:
     - build:
-        context: prod
+        context: release
