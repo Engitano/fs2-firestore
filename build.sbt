@@ -1,8 +1,5 @@
 import sbt.configs
 
-lazy val root = (project in file("."))
-  .aggregate(`fs2-firestore`)
-
 val majorVersion = SettingKey[String]("major version")
 val minorVersion = SettingKey[String]("minor version")
 val patchVersion = SettingKey[Option[String]]("patch version")
@@ -11,7 +8,7 @@ Global / majorVersion := "0"
 Global / minorVersion := "1"
 Global / patchVersion := Some("0")
 
-lazy val `fs2-firestore` = (project in file("core"))
+lazy val `fs2-firestore` = (project in file("."))
   .configs(IntegrationTest)
   .settings(
     Common(),
@@ -28,11 +25,11 @@ lazy val `fs2-firestore` = (project in file("core"))
       ),
     Compile / PB.includePaths := Seq(
       target.value / "protobuf_external",
-      baseDirectory.value / ".." / "googleapis",
+      baseDirectory.value / "googleapis",
     ),
     Compile / PB.protoSources := Seq(
-      baseDirectory.value / ".." / "googleapis" / "google" / "firestore" / "v1",
-      baseDirectory.value / ".." / "googleapis" / "google" / "firestore" / "admin" / "v1"
+      baseDirectory.value / "googleapis" / "google" / "firestore" / "v1",
+      baseDirectory.value / "googleapis" / "google" / "firestore" / "admin" / "v1"
     ),
     scalapbCodeGeneratorOptions += CodeGeneratorOption.FlatPackage,
     Compile / PB.targets := scalapbCodeGenerators.value
