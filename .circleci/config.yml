@@ -3,7 +3,7 @@ jobs:
   build:
     docker:
       - image: mtranter/sbt-protoc:1.2.8_2.12
-      - image: perrystallings/cloud-firestore-emulator
+      - image: pathmotion/firestore-emulator-docker:latest
         environment:
           FIRESTORE_PROJECT_ID: project-test
     working_directory: ~/fs2-firestore
