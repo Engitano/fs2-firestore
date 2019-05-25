@@ -36,7 +36,7 @@ import scala.collection.immutable.Map
 import scala.reflect.ClassTag
 import scala.util.Try
 
-case class FirestoreUnmarshallingException(reason: String)
+case class FirestoreUnmarshallingException(reason: String) extends Exception
 
 case class DocumentValue(fields: Map[String, Value])
 
