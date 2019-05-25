@@ -23,13 +23,14 @@ package com.engitano.fs2firestore
 
 import java.util.UUID
 
+import cats.Id
 import cats.implicits._
 import com.engitano.fs2firestore.ValueMarshaller.UnmarshalResult
 import com.google.firestore.v1.Value
 import com.google.firestore.v1.Value.ValueTypeOneof
 import com.google.firestore.v1.Value.ValueTypeOneof.MapValue
 import shapeless.labelled.{FieldBuilder, FieldType}
-import shapeless.{::, HList, HNil, LabelledGeneric, Lazy, Witness}
+import shapeless.{::, HList, HNil, LabelledGeneric, Lazy, TypeCase, Typeable, Witness}
 
 import scala.collection.immutable.Map
 import scala.reflect.ClassTag
@@ -150,6 +151,16 @@ object ValueMarshaller extends LowPriorityMarshallers {
 trait LowPriorityMarshallers {
 
   import Value.ValueTypeOneof._
+
+  implicit def valueMarshaller[T <: Value : Typeable] = new ValueMarshaller[T] {
+    private val tCase = TypeCase[T]
+    override def from(v: Value): UnmarshalResult[T] = v match {
+      case tCase(t) => Right(t)
+      case t => Left(FirestoreUnmarshallingException(s"Cannot convert value $t to expected type"))
+    }
+
+    override def to(t: T): Value = t
+  }
 
   implicit def stringMarshaller: ValueMarshaller[String] =
     ValueMarshaller.bimap[String](s => StringValue(s)) {
