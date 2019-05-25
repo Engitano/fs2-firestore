@@ -25,8 +25,8 @@ import java.util.UUID
 
 import cats.implicits._
 import cats.effect.{ConcurrentEffect, Resource, Sync}
-import com.engitano.fs2firestore.FirestoreFs2.{DocumentChanged, WriteOperation}
 import com.engitano.fs2firestore.ValueMarshaller.UnmarshalResult
+import com.engitano.fs2firestore.api._
 import com.google.firestore.v1.BatchGetDocumentsResponse.Result
 import com.google.firestore.v1.ListDocumentsRequest.ConsistencySelector
 import com.google.firestore.v1.ListenRequest.TargetChange.AddTarget
@@ -61,7 +61,7 @@ trait FirestoreFs2[F[_]] {
   def listCollectionIds(): F[Seq[String]]
 }
 
-object FirestoreFs2 {
+object api {
 
   sealed trait WriteOperation
   object WriteOperation {
@@ -83,6 +83,9 @@ object FirestoreFs2 {
     case object Deleted extends DocumentChangeType
   }
   case class DocumentChanged[T](name: String, t:Option[T], changeType: DocumentChangeType)
+}
+
+object FirestoreFs2 {
 
   def resource[F[_]: ConcurrentEffect](cfg: FirestoreConfig): Resource[F, FirestoreFs2[F]] = {
 

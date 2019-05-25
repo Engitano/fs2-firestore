@@ -1,9 +1,17 @@
-# fs2 PubSub
+[![CircleCI](https://circleci.com/gh/Engitano/fs2-firestore.svg?style=svg)](https://circleci.com/gh/Engitano/fs2-firestore)
+
+# fs2 FireStore client
 
 ##### A GCP Firesotre client based on [fs2](https://fs2.io/guide.html)
 
 
 Usage:
+
+```sbtshell
+resolvers ++= Seq(Resolver.bintrayRepo("engitano", "maven"))
+libraryDependencies += "com.engitano" %% "fs2-firestore" % FirestoreVersion
+```
+
 ```scala
       import DocumentMarshaller._
       val id = UUID.randomUUID()
