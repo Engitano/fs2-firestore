@@ -8,6 +8,11 @@ Global / majorVersion := "0"
 Global / minorVersion := "1"
 Global / patchVersion := Some("0")
 
+val writeVersion = taskKey[Unit]("Writes the version to version.txt")
+writeVersion := {
+  IO.write((baseDirectory.value / "version.txt"), (`fs2-firestore`  / version).value)
+}
+
 lazy val `fs2-firestore` = (project in file("."))
   .configs(IntegrationTest)
   .settings(

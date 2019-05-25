@@ -24,42 +24,28 @@ package com.engitano.fs2firestore
 import java.util.UUID
 
 import cats.effect._
-import com.google.firestore.v1.{
-  CreateDocumentRequest,
-  Document,
-  GetDocumentRequest,
-  Value
-}
+import com.google.firestore.v1.{CreateDocumentRequest, Document, GetDocumentRequest, Value}
 import com.spotify.docker.client.{DefaultDockerClient, DockerClient}
 import com.whisk.docker.impl.spotify.SpotifyDockerFactory
-import com.whisk.docker.{
-  DockerContainer,
-  DockerFactory,
-  DockerKit,
-  DockerReadyChecker
-}
+import com.whisk.docker.{DockerContainer, DockerFactory, DockerKit, DockerReadyChecker}
 import io.grpc.Metadata
 import org.scalatest.{BeforeAndAfterAll, Matchers, WordSpec}
 
 import scala.concurrent.ExecutionContext
 
-class E2eSpec
-    extends WordSpec
-    with Matchers
-    with DockerFirestoreService
-    with BeforeAndAfterAll {
+class E2eSpec extends WordSpec with Matchers with DockerFirestoreService with BeforeAndAfterAll {
 
   implicit val contextShift: ContextShift[IO] =
     IO.contextShift(ExecutionContext.global)
 
   override def beforeAll(): Unit = {
-    if(!Option(System.getenv("CIRCLECI")).exists(_.nonEmpty)) {
+    if (!Option(System.getenv("CIRCLECI")).exists(_.nonEmpty)) {
       startAllOrFail()
     }
   }
 
   override def afterAll(): Unit = {
-    if(!Option(System.getenv("CIRCLECI")).exists(_.nonEmpty)) {
+    if (!Option(System.getenv("CIRCLECI")).exists(_.nonEmpty)) {
       stopAllQuietly()
     }
   }
@@ -72,10 +58,10 @@ class E2eSpec
 
   "The Generated clients" should {
     "be able to read and write to firestore" in {
-      val testObj = Person(UUID.randomUUID(), "mark", Some(false), Seq(Person(UUID.randomUUID(), "Iz", Some(true), Seq())))
+      val testObj    = Person(UUID.randomUUID(), "mark", Some(false), Seq(Person(UUID.randomUUID(), "Iz", Some(true), Seq())))
       val marshaller = DocumentMarshaller[Person]
-      val fields = marshaller.to(testObj)
-      val cfg = FirestoreConfig.local(DefaultGcpProject, DefaultPubsubPort)
+      val fields     = marshaller.to(testObj)
+      val cfg        = FirestoreConfig.local(DefaultGcpProject, DefaultPubsubPort)
 
       val docId = UUID.randomUUID().toString
       val res = Client.create[IO](cfg).use { c =>
@@ -93,7 +79,7 @@ class E2eSpec
         def metadata = new Metadata()
 
         for {
-          saved <- c.createDocument(request, metadata)
+          saved   <- c.createDocument(request, metadata)
           fetched <- c.getDocument(getReq, metadata)
         } yield saved == fetched
       }
@@ -114,12 +100,12 @@ class E2eSpec
 
     "save and read" in {
       import DocumentMarshaller._
-      val id = UUID.randomUUID()
+      val id         = UUID.randomUUID()
       val testPerson = Person(id, "Nugget", None, Seq())
       val personF = FirestoreFs2.resource[IO](FirestoreConfig.local(DefaultGcpProject, DefaultPubsubPort)).use { client =>
         for {
-          _ <- client.createDocument(testPerson)
-        nugget <- client.getDocument[Person](id.toString)
+          _      <- client.createDocument(testPerson)
+          nugget <- client.getDocument[Person](id.toString)
         } yield nugget
       }
 

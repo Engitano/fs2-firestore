@@ -9,4 +9,5 @@ object Common {
     startYear := Some(2019),
     licenses += ("MIT", new URL("http://opensource.org/licenses/MIT"))
   )
+  
 }

@@ -14,7 +14,8 @@ jobs:
             - ivy
       - run: git submodule sync
       - run: git submodule update --init
-      - run: sbt ";set Global / patchVersion := Some(\"$CIRCLE_BUILD_NUM\");test;it:test;publish"
+      - run: sbt ";set Global / patchVersion := Some(\"$CIRCLE_BUILD_NUM\");test;it:test;publish;writeVersion"
+      - run: git tag $(cat ./version.txt) && git push --tags
       - save_cache:
           key: ivy
           paths:
@@ -27,3 +28,6 @@ workflows:
     jobs:
       - build:
           context: release
+          filters:
+            tags:
+              ignore: /.*/
