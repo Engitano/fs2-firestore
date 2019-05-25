@@ -49,7 +49,7 @@ trait FirestoreFs2[F[_]] {
                                                            consistencySelector: ConsistencySelector = ConsistencySelector.Empty
                                                          ): F[Seq[UnmarshalResult[T]]]
   def createDocument[T: ToDocumentFields: CollectionFor: IdFor](t: T): F[Unit]
-  def updateDocument[T: ToDocumentFields: CollectionFor: IdFor](t: T): F[Unit]
+  def putDocument[T: ToDocumentFields: CollectionFor: IdFor](t: T): F[Unit]
   def deleteDocument(docName: String): F[Unit]
   def deleteDocument(collection: String, docId: String): F[Unit]
   def batchGetDocuments[T: FromDocumentFields: CollectionFor](docNames: List[String]): fs2.Stream[F, UnmarshalResult[T]]
@@ -155,7 +155,7 @@ object FirestoreFs2 {
             )
             .as(())
 
-        override def updateDocument[T: ToDocumentFields: CollectionFor: IdFor](t: T): F[Unit] =
+        override def putDocument[T: ToDocumentFields: CollectionFor: IdFor](t: T): F[Unit] =
           client
             .updateDocument(
               UpdateDocumentRequest(

@@ -98,7 +98,7 @@ class E2eSpec extends WordSpec with Matchers with DockerFirestoreService with Be
       personF.unsafeRunSync() shouldBe None
     }
 
-    "save and read" in {
+    "save and read and update" in {
       import DocumentMarshaller._
       val id         = UUID.randomUUID()
       val testPerson = Person(id, "Nugget", None, Seq())
@@ -106,10 +106,15 @@ class E2eSpec extends WordSpec with Matchers with DockerFirestoreService with Be
         for {
           _      <- client.createDocument(testPerson)
           nugget <- client.getDocument[Person](id.toString)
-        } yield nugget
+          updated = nugget.get.right.get.copy(name = "Fred")
+          _ <- client.putDocument(updated)
+         fred <- client.getDocument[Person](id.toString)
+        } yield (nugget, fred)
       }
 
-      personF.unsafeRunSync() shouldBe Some(Right(testPerson))
+      val res = personF.unsafeRunSync()
+      res._1 shouldBe Some(Right(testPerson))
+      res._2.get.right.get.name shouldBe "Fred"
     }
   }
 
