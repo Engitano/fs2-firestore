@@ -66,6 +66,9 @@ class E2eSpec
 
   case class Person(id: UUID, name: String, isFemale: Option[Boolean], kids: Seq[Person])
 
+  implicit val idFor = new IdFor[Person] {
+    override def getId(t: Person): String = t.id.toString
+  }
 
   "The Generated clients" should {
     "be able to read and write to firestore" in {
@@ -96,6 +99,31 @@ class E2eSpec
       }
 
       res.unsafeRunSync() shouldBe true
+    }
+  }
+
+  "The high level client" should {
+    "return None when no document exists in a collection" in {
+      import DocumentMarshaller._
+      val personF = FirestoreFs2.resource[IO](FirestoreConfig.local(DefaultGcpProject, DefaultPubsubPort)).use { client =>
+        client.getDocument[Person]("freddo")
+      }
+
+      personF.unsafeRunSync() shouldBe None
+    }
+
+    "save and read" in {
+      import DocumentMarshaller._
+      val id = UUID.randomUUID()
+      val testPerson = Person(id, "Nugget", None, Seq())
+      val personF = FirestoreFs2.resource[IO](FirestoreConfig.local(DefaultGcpProject, DefaultPubsubPort)).use { client =>
+        for {
+          _ <- client.createDocument(testPerson)
+        nugget <- client.getDocument[Person](id.toString)
+        } yield nugget
+      }
+
+      personF.unsafeRunSync() shouldBe Some(Right(testPerson))
     }
   }
 

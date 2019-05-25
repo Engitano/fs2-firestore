@@ -32,14 +32,19 @@ import shapeless.labelled.{FieldBuilder, FieldType}
 import shapeless.{::, HList, HNil, LabelledGeneric, Lazy, Witness}
 
 import scala.collection.immutable.Map
+import scala.reflect.ClassTag
 import scala.util.Try
 
-case class FirestoreUnmarsallingException(reason: String)
+case class FirestoreUnmarshallingException(reason: String)
 
 case class DocumentValue(fields: Map[String, Value])
 
 trait ToFirestoreValue[T] {
   def to(t: T): Value
+}
+
+object FromFirestoreValue {
+  def apply[T](implicit f: FromFirestoreValue[T]) = f
 }
 
 trait FromFirestoreValue[T] {
@@ -50,8 +55,38 @@ trait ValueMarshaller[T]
   extends ToFirestoreValue[T]
     with FromFirestoreValue[T]
 
+object ToDocumentFields {
+  def apply[T](implicit t: ToDocumentFields[T]) = t
+}
+
 trait ToDocumentFields[T] {
   def to(t: T): Map[String, Value]
+}
+
+object IdFor {
+  def apply[T](implicit n: IdFor[T]) = n
+}
+
+trait IdFor[T] {
+  def getId(t: T): String
+}
+
+object CollectionFor extends LowPriorityCollectionFor {
+  def apply[T](implicit cf: CollectionFor[T]) = cf
+}
+
+trait CollectionFor[T] {
+  def collectionName: String
+}
+
+trait LowPriorityCollectionFor {
+  implicit def defaultCollectionFor[T: ClassTag] = new CollectionFor[T] {
+    override def collectionName: String = implicitly[ClassTag[T]].runtimeClass.getSimpleName.toLowerCase
+  }
+}
+
+object FromDocumentFields {
+  def apply[T](implicit f: FromDocumentFields[T]) = f
 }
 
 trait FromDocumentFields[T] {
@@ -82,7 +117,7 @@ object DocumentMarshaller {
 
 
 object ValueMarshaller extends LowPriorityMarshallers {
-  type UnmarshalResult[T] = Either[FirestoreUnmarsallingException, T]
+  type UnmarshalResult[T] = Either[FirestoreUnmarshallingException, T]
   type MaybeValueToT[T]   = PartialFunction[ValueTypeOneof, T]
 
   def apply[T](implicit fm: ValueMarshaller[T]): ValueMarshaller[T] = fm
@@ -104,7 +139,7 @@ object ValueMarshaller extends LowPriorityMarshallers {
         case Some(s) => s
         case None =>
           Left(
-            FirestoreUnmarsallingException(
+            FirestoreUnmarshallingException(
               s"Cannot convert value $v to expected type"
             )
           )
@@ -150,7 +185,7 @@ trait LowPriorityMarshallers {
     ValueMarshaller.bimapOr[UUID](i => StringValue(i.toString)) {
       case StringValue(s) =>
         Try(UUID.fromString(s)).toEither
-          .leftMap(c => FirestoreUnmarsallingException(c.getMessage))
+          .leftMap(c => FirestoreUnmarshallingException(c.getMessage))
     }
 
   implicit def optionMarshaller[T](
@@ -177,7 +212,7 @@ trait LowPriorityMarshallers {
         v.toList.traverse[UnmarshalResult, T](x => fm.from(x))
       case v =>
         Left(
-          FirestoreUnmarsallingException(s"Cannot marshall firestore value $v")
+          FirestoreUnmarshallingException(s"Cannot marshall firestore value $v")
         )
     }
 

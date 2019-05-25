@@ -58,7 +58,7 @@ package object fs2firestore {
       new FirestoreConfig(project, FIRESTORE_SERVICE_ID, Some(credentials))
   }
 
-  case class FirestoreConfig(project: String, host: String, credentials: Option[CallCredentials], plainText: Boolean = false) {
+  case class FirestoreConfig(project: String, host: String, credentials: Option[CallCredentials], plainText: Boolean = false, database: String = "(default)") {
 
 
     private[fs2firestore] def callOps = credentials.foldLeft(CallOptions.DEFAULT)(_ withCallCredentials _)

@@ -1,18 +1,29 @@
 # fs2 PubSub
 
-##### A GCP PubSub client based on [fs2](https://fs2.io/guide.html)
+##### A GCP Firesotre client based on [fs2](https://fs2.io/guide.html)
 
 
-Basic Usage:
-
+Usage:
 ```scala
-      val config = GrpcPubsubConfig.local(DefaultGcpProject, DefaultPubsubPort)
-      val publishStream = Stream.emits[IO, Int](1 to 1000).toPubSub(topicName, config))
-      val subscribeStream = Subscriber.stream[IO, Int](testSubscription, config) { s =>
-        s.map(_.peek(businessLogic))
+      import DocumentMarshaller._
+      val id = UUID.randomUUID()
+      val testPerson = Person(id, "Nugget", None, Seq())
+      val personF = FirestoreFs2.resource[IO](FirestoreConfig.local(DefaultGcpProject, DefaultPubsubPort)).use { client =>
+        for {
+          _ <- client.createDocument(testPerson)
+        nugget <- client.getDocument[Person](id.toString)
+        } yield nugget
       }
 
-      def businessLogic(s: Int) = println(s)
-
-      val result = (publishStream >> subscribeStream).compile.drain.attempt.unsafeRunSync()
+      personF.unsafeRunSync() shouldBe Some(Right(testPerson))
 ```
+
+
+
+ToDo:
+* Implement StructuredQuery wrapper and runQuery and subscribe to queries
+* Tidy up streaming APIS
+* Add more tests
+* Rationalise packages/files
+    
+    
