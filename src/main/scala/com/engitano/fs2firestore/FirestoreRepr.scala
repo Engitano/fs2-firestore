@@ -66,6 +66,10 @@ trait ToDocumentFields[T] {
 
 object IdFor {
   def apply[T](implicit n: IdFor[T]) = n
+
+  def apply[T](f: T => String) = new IdFor[T] {
+    override def getId(t: T): String = f(t)
+  }
 }
 
 trait IdFor[T] {

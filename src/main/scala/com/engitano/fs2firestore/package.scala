@@ -46,7 +46,6 @@ package object fs2firestore {
       new FirestoreConfig(project, FIRESTORE_SERVICE_ID,
         Some(MoreCallCredentials.from(GoogleCredentials.getApplicationDefault)))
 
-
     def apply(project: String, creds: File): FirestoreConfig =
       new FirestoreConfig(project, FIRESTORE_SERVICE_ID,
         Some(MoreCallCredentials.from(GoogleCredentials.fromStream(new FileInputStream(creds)))))
