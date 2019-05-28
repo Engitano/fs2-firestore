@@ -21,10 +21,14 @@
 
 package com.engitano.fs2firestore
 
+import java.io.File
 import java.util.UUID
 
+import cats.syntax._
 import cats.effect._
-import com.google.firestore.v1.{CreateDocumentRequest, Document, GetDocumentRequest, Value}
+import com.engitano.fs2firestore.api.WriteOperation
+import com.engitano.fs2firestore.queries.{CollectionOf, QueryBuilder}
+import com.google.firestore.v1._
 import com.spotify.docker.client.{DefaultDockerClient, DockerClient}
 import com.whisk.docker.impl.spotify.SpotifyDockerFactory
 import com.whisk.docker.{DockerContainer, DockerFactory, DockerKit, DockerReadyChecker}
@@ -50,7 +54,7 @@ class E2eSpec extends WordSpec with Matchers with DockerFirestoreService with Be
     }
   }
 
-  case class Person(id: UUID, name: String, isFemale: Option[Boolean], kids: Seq[Person])
+  case class Person(id: UUID, name: String, age: Int, isFemale: Option[Boolean], kids: Seq[String])
 
   implicit val idFor = new IdFor[Person] {
     override def getId(t: Person): String = t.id.toString
@@ -58,7 +62,7 @@ class E2eSpec extends WordSpec with Matchers with DockerFirestoreService with Be
 
   "The Generated clients" should {
     "be able to read and write to firestore" in {
-      val testObj    = Person(UUID.randomUUID(), "mark", Some(false), Seq(Person(UUID.randomUUID(), "Iz", Some(true), Seq())))
+      val testObj    = Person(UUID.randomUUID(), "mark", 30, Some(false), Seq("Iz"))
       val marshaller = DocumentMarshaller[Person]
       val fields     = marshaller.to(testObj)
       val cfg        = FirestoreConfig.local(DefaultGcpProject, DefaultPubsubPort)
@@ -101,20 +105,65 @@ class E2eSpec extends WordSpec with Matchers with DockerFirestoreService with Be
     "save and read and update" in {
       import DocumentMarshaller._
       val id         = UUID.randomUUID()
-      val testPerson = Person(id, "Nugget", None, Seq())
+      val testPerson = Person(id, "Nugget", 30, None, Seq())
       val personF = FirestoreFs2.resource[IO](FirestoreConfig.local(DefaultGcpProject, DefaultPubsubPort)).use { client =>
         for {
           _      <- client.createDocument(testPerson)
           nugget <- client.getDocument[Person](id.toString)
           updated = nugget.get.right.get.copy(name = "Fred")
-          _ <- client.putDocument(updated)
-         fred <- client.getDocument[Person](id.toString)
+          _    <- client.putDocument(updated)
+          fred <- client.getDocument[Person](id.toString)
         } yield (nugget, fred)
       }
+    }
 
+    "Streams data into firestore" ignore {
+      import com.engitano.fs2firestore.queries.syntax._
+      import DocumentMarshaller._
+      import ValueMarshaller._
+      def id         = UUID.randomUUID()
+      implicit val idFor = IdFor.fromFunction[Person](_.id.toString)
+      val people = fs2.Stream.emits[IO, WriteOperation.Update]((1 to 20).map(_ => Person(id, "Nugget", 30, None, Seq())).map(p => WriteOperation.update(p)))
+      val query = QueryBuilder.from(CollectionOf[Person]).where { pb =>
+        import pb._
+        ('name =:= "Nugget")
+      }.build
+      val write = FirestoreFs2.resource[IO](FirestoreConfig.local(DefaultGcpProject, DefaultPubsubPort)).use { client =>
+        client.write(people).compile.drain
+      }
+      write.unsafeRunSync()
+
+      val personF = FirestoreFs2.resource[IO](FirestoreConfig.local(DefaultGcpProject, DefaultPubsubPort)).use { client =>
+        client.runQuery(query).compile.toList
+      }
       val res = personF.unsafeRunSync()
-      res._1 shouldBe Some(Right(testPerson))
-      res._2.get.right.get.name shouldBe "Fred"
+
+      res.collect {
+        case Right(r) => r
+      }.forall(_.name == "Nugget") shouldBe true
+    }
+
+    "runs queries" in {
+      import com.engitano.fs2firestore.queries.syntax._
+      import ValueMarshaller._
+      import DocumentMarshaller._
+      val id         = UUID.randomUUID()
+      val testPerson = Person(id, "Nugget", 30, None, Seq())
+      val query = QueryBuilder.from(CollectionOf[Person]).where { pb =>
+        import pb._
+        ('name =:= "Nugget") &&
+          ('age :> 29) &&
+          ('age :< 31)
+      }.build
+      val personF = FirestoreFs2.resource[IO](FirestoreConfig.local(DefaultGcpProject, DefaultPubsubPort)).use { client =>
+        val result = for {
+          _      <- fs2.Stream.eval(client.createDocument(testPerson))
+          nugget <- client.runQuery(query)
+        } yield nugget
+
+        result.compile.toList
+      }
+      personF.unsafeRunSync().head.right.get shouldBe testPerson
     }
   }
 

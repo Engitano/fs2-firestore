@@ -27,10 +27,14 @@ import cats.implicits._
 import cats.effect.{ConcurrentEffect, Resource, Sync}
 import com.engitano.fs2firestore.ValueMarshaller.UnmarshalResult
 import com.engitano.fs2firestore.api._
+import com.engitano.fs2firestore.queries.ToFilter
 import com.google.firestore.v1.BatchGetDocumentsResponse.Result
 import com.google.firestore.v1.ListDocumentsRequest.ConsistencySelector
 import com.google.firestore.v1.ListenRequest.TargetChange.AddTarget
 import com.google.firestore.v1.ListenResponse.ResponseType
+import com.google.firestore.v1.RunQueryRequest.QueryType
+import com.google.firestore.v1.StructuredQuery.{FieldReference, Filter}
+import com.google.firestore.v1.StructuredQuery.Filter.FilterType.FieldFilter
 import com.google.firestore.v1.Target.DocumentsTarget
 import com.google.firestore.v1._
 import com.google.protobuf.ByteString
@@ -41,13 +45,13 @@ import io.grpc.{Metadata, StatusRuntimeException}
 trait FirestoreFs2[F[_]] {
   def getDocument[T: FromDocumentFields: CollectionFor](docName: String): F[Option[UnmarshalResult[T]]]
   def listDocuments[T: FromDocumentFields: CollectionFor](
-                                                           pageSize: Option[Int] = None,
-                                                           pageToken: Option[String] = None,
-                                                           orderBy: Option[String] = None,
-                                                           mask: Option[DocumentMask] = None,
-                                                           showMissing: Boolean = false,
-                                                           consistencySelector: ConsistencySelector = ConsistencySelector.Empty
-                                                         ): F[Seq[UnmarshalResult[T]]]
+      pageSize: Option[Int] = None,
+      pageToken: Option[String] = None,
+      orderBy: Option[String] = None,
+      mask: Option[DocumentMask] = None,
+      showMissing: Boolean = false,
+      consistencySelector: ConsistencySelector = ConsistencySelector.Empty
+  ): F[Seq[UnmarshalResult[T]]]
   def createDocument[T: ToDocumentFields: CollectionFor: IdFor](t: T): F[Unit]
   def putDocument[T: ToDocumentFields: CollectionFor: IdFor](t: T): F[Unit]
   def deleteDocument(docName: String): F[Unit]
@@ -56,12 +60,23 @@ trait FirestoreFs2[F[_]] {
   def beginTransaction(mode: TransactionOptions.Mode = TransactionOptions.Mode.Empty): F[ByteString]
   def commit(txId: ByteString, operations: Seq[WriteOperation]): F[Unit]
   def rollback(txId: ByteString): F[Unit]
-  def write[T: ToDocumentFields](request: fs2.Stream[F, Seq[WriteOperation]]): fs2.Stream[F, Unit]
+  def runQuery[T: FromDocumentFields: CollectionFor](f: Query[T]): fs2.Stream[F, UnmarshalResult[T]]
+  def write(request: fs2.Stream[F, WriteOperation]): fs2.Stream[F, Unit]
   def listenForDocChanges[T: FromDocumentFields](docIds: Seq[String]): fs2.Stream[F, UnmarshalResult[DocumentChanged[T]]]
   def listCollectionIds(): F[Seq[String]]
 }
 
 object api {
+
+  case class Query[T: CollectionFor](predicate: Filter) {
+    def build = QueryType.StructuredQuery(
+      StructuredQuery(
+        None,
+        Seq(StructuredQuery.CollectionSelector(CollectionFor[T].collectionName)),
+        Some(predicate)
+      )
+    )
+  }
 
   sealed trait WriteOperation
   object WriteOperation {
@@ -82,7 +97,7 @@ object api {
     case object Updated extends DocumentChangeType
     case object Deleted extends DocumentChangeType
   }
-  case class DocumentChanged[T](name: String, t:Option[T], changeType: DocumentChangeType)
+  case class DocumentChanged[T](name: String, t: Option[T], changeType: DocumentChangeType)
 }
 
 object FirestoreFs2 {
@@ -93,6 +108,8 @@ object FirestoreFs2 {
       new FirestoreFs2[F] {
 
         private def metadata = new Metadata()
+
+        private def rootDb = s"projects/${cfg.project}/databases/${cfg.database}"
 
         private def rootDocuments = s"projects/${cfg.project}/databases/${cfg.database}/documents"
 
@@ -113,9 +130,9 @@ object FirestoreFs2 {
           client
             .getDocument(GetDocumentRequest(documentName(docName)), metadata)
             .map(d => FromDocumentFields[T].from(d.fields).some)
-          .recover {
-            case e:StatusRuntimeException if e.getMessage.contains("NOT_FOUND") => None
-          }
+            .recover {
+              case e: StatusRuntimeException if e.getMessage.contains("NOT_FOUND") => None
+            }
 
         override def listDocuments[T: FromDocumentFields: CollectionFor](
             pageSize: Option[Int] = None,
@@ -200,40 +217,50 @@ object FirestoreFs2 {
         override def rollback(txId: ByteString): F[Unit] =
           client.rollback(RollbackRequest(cfg.database, txId), metadata).as(())
 
-//        override def runQuery(request: RunQueryRequest): fs2.Stream[F, RunQueryResponse] = ???
+        override def runQuery[T: FromDocumentFields: CollectionFor](f: Query[T]): fs2.Stream[F, UnmarshalResult[T]] = {
+          val q = RunQueryRequest(
+            rootDocuments,
+            f.build
+          )
+          client.runQuery(q, metadata).map(r => r.document.map(d => FromDocumentFields[T].from(d.fields))).collect {
+            case Some(v) => v
+          }
+        }
 
-        override def write[T: ToDocumentFields](request: fs2.Stream[F, Seq[WriteOperation]]): fs2.Stream[F, Unit] = {
+        override def write(request: fs2.Stream[F, WriteOperation]): fs2.Stream[F, Unit] = {
           Stream.eval(Queue.unbounded[F, WriteRequest]).flatMap { queue =>
             def queueNext(w: WriteRequest): F[Unit] = {
               queue.enqueue1(w).as(())
             }
             val streamIdF = Stream.eval(Sync[F].delay(UUID.randomUUID().toString))
-            val startup   = streamIdF.flatMap(sid => Stream.eval(queueNext(WriteRequest(cfg.database, sid))))
+            val startup   = streamIdF.flatMap(sid => Stream.eval(queueNext(WriteRequest(rootDb, sid))))
             val doWrite   = client.write(queue.dequeue, metadata)
 
-            for {
-              chunks <- startup >> doWrite
-              next   <- request.map(w => queueNext(WriteRequest(cfg.database, streamToken = chunks.streamToken, writes = w.map(toWrite))))
-            } yield next
+            (startup >> doWrite).zip(request).evalMap {
+              case (resp, req) => queueNext(WriteRequest(rootDb, streamToken = resp.streamToken, writes = Seq(toWrite(req))))
+            }
           }
 
         }
 
+
         override def listenForDocChanges[T: FromDocumentFields](docIds: Seq[String]): fs2.Stream[F, UnmarshalResult[DocumentChanged[T]]] =
-          client.listen(
-            Stream.emit[F, ListenRequest](
-              ListenRequest(cfg.database, targetChange = AddTarget(Target(targetType = Target.TargetType.Documents(DocumentsTarget(docIds)))))
-            ),
-            metadata
-          ).collect {
-            case ListenResponse(ResponseType.DocumentChange(DocumentChange(Some(document), _, _))) =>
-              FromDocumentFields[T].from(document.fields).map { d =>
-                DocumentChanged[T](document.name, Some(d), DocumentChangeType.Updated)
-              }
-            case ListenResponse(ResponseType.DocumentDelete(DocumentDelete(name, _, _))) =>
+          client
+            .listen(
+              Stream.emit[F, ListenRequest](
+                ListenRequest(cfg.database, targetChange = AddTarget(Target(targetType = Target.TargetType.Documents(DocumentsTarget(docIds)))))
+              ),
+              metadata
+            )
+            .collect {
+              case ListenResponse(ResponseType.DocumentChange(DocumentChange(Some(document), _, _))) =>
+                FromDocumentFields[T].from(document.fields).map { d =>
+                  DocumentChanged[T](document.name, Some(d), DocumentChangeType.Updated)
+                }
+              case ListenResponse(ResponseType.DocumentDelete(DocumentDelete(name, _, _))) =>
                 Right(DocumentChanged[T](name, None, DocumentChangeType.Deleted))
 
-          }
+            }
 
         override def listCollectionIds(): F[Seq[String]] =
           client.listCollectionIds(ListCollectionIdsRequest(rootDocuments), metadata).map(_.collectionIds)

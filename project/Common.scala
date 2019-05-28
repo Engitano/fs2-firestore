@@ -8,6 +8,7 @@ object Common {
     organizationName := "Engitano",
     startYear := Some(2019),
     licenses += ("MIT", new URL("http://opensource.org/licenses/MIT"))
+
   )
   
 }

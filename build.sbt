@@ -23,6 +23,9 @@ lazy val `fs2-firestore` = (project in file("."))
     libraryDependencies ++= Dependencies(),
     bintrayOrganization := Some("engitano"),
     bintrayPackageLabels := Seq("firestore", "fs2"),
+    coverageExcludedPackages := "<empty>;com.google.*;",
+    coverageMinimum := 90.0,
+    coverageFailOnMinimum := true,
     Defaults.itSettings ++ headerSettings(IntegrationTest) ++ automateHeaderSettings(IntegrationTest),
     addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.9.8"),
       PB.targets in Compile := Seq(
@@ -37,6 +40,9 @@ lazy val `fs2-firestore` = (project in file("."))
       baseDirectory.value / "googleapis" / "google" / "firestore" / "admin" / "v1"
     ),
     scalapbCodeGeneratorOptions += CodeGeneratorOption.FlatPackage,
-    Compile / PB.targets := scalapbCodeGenerators.value
+    Compile / PB.targets := scalapbCodeGenerators.value,
+    addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full)
   )
 .enablePlugins(Fs2Grpc)
+
+addCommandAlias("fullBuild",";clean;coverage;test;it:test;coverageReport")

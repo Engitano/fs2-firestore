@@ -5,7 +5,7 @@ import java.util.UUID
 import com.google.`type`.LatLng
 import org.scalatest.{Matchers, WordSpec}
 
-case class Person(id: UUID, name: String, isFemale: Option[Boolean], homeLocation: LatLng, kids: Seq[Person])
+
 
 class FirestoreReprSpec extends WordSpec with Matchers {
 
@@ -19,7 +19,6 @@ class FirestoreReprSpec extends WordSpec with Matchers {
     "turn an entity into dock fields" in {
       val v = DocumentMarshaller[Person]
       val testObj = Person(UUID.randomUUID(), "mark", Some(false), LatLng(-33.8688, 151.2093), Seq(Person(UUID.randomUUID(), "Iz", Some(true), LatLng(-33.8688, 151.2093), Seq())))
-      println(v.to(testObj))
       v.from(v.to(testObj)) shouldEqual Right(testObj)
     }
   }

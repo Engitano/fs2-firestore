@@ -40,6 +40,10 @@ case class FirestoreUnmarshallingException(reason: String) extends Exception
 
 case class DocumentValue(fields: Map[String, Value])
 
+object ToFirestoreValue {
+  def apply[T](implicit tfv: ToFirestoreValue[T]) = tfv
+}
+
 trait ToFirestoreValue[T] {
   def to(t: T): Value
 }
@@ -156,15 +160,15 @@ trait LowPriorityMarshallers {
 
   import Value.ValueTypeOneof._
 
-  implicit def valueMarshaller[T <: Value : Typeable] = new ValueMarshaller[T] {
-    private val tCase = TypeCase[T]
-    override def from(v: Value): UnmarshalResult[T] = v match {
-      case tCase(t) => Right(t)
-      case t => Left(FirestoreUnmarshallingException(s"Cannot convert value $t to expected type"))
-    }
-
-    override def to(t: T): Value = t
-  }
+//  implicit def valueMarshaller[T <: Value : Typeable] = new ValueMarshaller[T] {
+//    private val tCase = TypeCase[T]
+//    override def from(v: Value): UnmarshalResult[T] = v match {
+//      case tCase(t) => Right(t)
+//      case t => Left(FirestoreUnmarshallingException(s"Cannot convert value $t to expected type"))
+//    }
+//
+//    override def to(t: T): Value = t
+//  }
 
   implicit def stringMarshaller: ValueMarshaller[String] =
     ValueMarshaller.bimap[String](s => StringValue(s)) {
