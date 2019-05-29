@@ -1,6 +1,6 @@
 package com.engitano.fs2firestore.queries
 
-import shapeless.{ReprTypes, SingletonTypeUtils}
+import shapeless.{HList, ReprTypes, SingletonTypeUtils}
 
 import scala.reflect.macros.whitebox
 
@@ -14,12 +14,13 @@ class QueryMacros(val c: whitebox.Context) extends SingletonTypeUtils with ReprT
     """
   }
 
-  def mkOps(field: String,  w: Type): Tree = {
+  def mkOps(field: String,  w: Type, r: Type): Tree = {
     val name = TypeName(c.freshName("anon$"))
 
     q"""
       {
-        final class $name extends ColumnOps {
+        final class $name extends com.engitano.fs2firestore.queries.syntax.ColumnOps {
+          type R = $r
           type Col = $w
           val columnName = $field
         }
@@ -28,8 +29,8 @@ class QueryMacros(val c: whitebox.Context) extends SingletonTypeUtils with ReprT
     """
   }
 
-  def buildOps(s: Tree): Tree  = (s.tpe, s) match {
+  def buildOps[Repr <: HList : WeakTypeTag](s: Tree): Tree  = (s.tpe, s) match {
     case (SymTpe, LiteralSymbol(sym)) =>
-      mkOps(sym, SingletonSymbolType(sym))
+      mkOps(sym, SingletonSymbolType(sym), weakTypeOf[Repr])
   }
 }

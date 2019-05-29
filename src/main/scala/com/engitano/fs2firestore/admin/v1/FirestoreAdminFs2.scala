@@ -2,46 +2,74 @@ package com.engitano.fs2firestore.admin.v1
 
 import cats.effect.{ConcurrentEffect, Resource}
 import cats.implicits._
-import com.engitano.fs2firestore.{Admin, FirestoreConfig}
+import com.engitano.fs2firestore.{Admin, CollectionFor, FirestoreConfig}
 import com.google.firestore.admin.v1.Index.IndexField
-import com.google.firestore.admin.v1.{CreateIndexRequest, Index}
+import com.google.firestore.admin.v1.{CreateIndexRequest, Index, ListIndexesRequest}
 import io.grpc.Metadata
+import shapeless.{HList, Witness}
+
+object SymbolHelpers {
+  def keyOf[A](implicit wt:Witness.Aux[A]):String = asKeyName(wt.value)
+
+  def asKeyName(a:Any):String = {
+    a match {
+      case sym:Symbol => sym.name
+      case other => other.toString
+    }
+  }
+}
 
 trait FirestoreAdminFs2[F[_]] {
-  def createSimpleIndex(collectionName: String, field: String, descending: Boolean = false, indexName: Option[String] = None): F[Unit]
+  def createIndex[C : CollectionFor, R <: HList, K<: HList](ix: IndexDefinition): F[Unit]
+  def listIndexes(collectionName: String): F[Seq[IndexDefinition]]
 }
 
 object FirestoreAdminFs2 {
+
+  import com.engitano.fs2firestore.syntax._
 
   private def metadata = new Metadata()
 
   def resource[F[_]: ConcurrentEffect](cfg: FirestoreConfig): Resource[F, FirestoreAdminFs2[F]] =
     Admin.create[F](cfg).map { client =>
       new FirestoreAdminFs2[F] {
-        override def createSimpleIndex(collectionName: String, field: String, descending: Boolean = false, indexName: Option[String] = None): F[Unit] =
+        override def createIndex[C : CollectionFor, R <: HList, K <: HList](ix: IndexDefinition): F[Unit] =
           client
             .createIndex(
               CreateIndexRequest(
-                indexName.getOrElse(s"${collectionName}_$field"),
-                Some(
-                  Index(
-                    queryScope = Index.QueryScope.COLLECTION,
-                    fields = Seq(
-                      IndexField(
-                        field,
-                        IndexField.ValueMode.Order(
-                          if (descending) IndexField.Order.ASCENDING
-                          else IndexField.Order.DESCENDING
-                        )
-                      )
-                    )
-                  )
-                )
+                cfg.collectionGroupPath(CollectionFor[C].collectionName),
+                Some(ix.toIndex)
               ),
               metadata
             )
             .as(())
+
+        override def listIndexes(collectionName: String): F[Seq[IndexDefinition]] =
+          client.listIndexes(ListIndexesRequest(cfg.collectionGroupPath(collectionName)), metadata)
+            .map(_.indexes.map(_.toIndexDef))
       }
     }
 
+  private implicit class PimpedIndex(ix: Index) {
+    def toIndexDef = IndexDefinition(ix.fields.map(_.toIndexFieldDef))
+  }
+
+  private implicit class PimpedIndexField(ixf: IndexField) {
+    def toIndexFieldDef =
+      IndexFieldDefinition(ixf.fieldPath, ixf.valueMode == IndexField.ValueMode.Order(IndexField.Order.DESCENDING))
+  }
+
+  private implicit class PimpedIndexDef(ix: IndexDefinition) {
+    def toIndex = Index(
+      queryScope = Index.QueryScope.COLLECTION,
+      fields = ix.fields.map(_.indexField)
+    )
+  }
+
+  private implicit class PimpedIndexFieldDef(ixf: IndexFieldDefinition) {
+    def indexField: IndexField = IndexField(ixf.name, if(ixf.isDescending)
+      IndexField.ValueMode.Order(IndexField.Order.DESCENDING)
+    else
+      IndexField.ValueMode.Order(IndexField.Order.ASCENDING))
+  }
 }

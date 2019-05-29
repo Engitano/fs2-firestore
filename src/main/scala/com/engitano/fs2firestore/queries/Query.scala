@@ -3,13 +3,12 @@ package com.engitano.fs2firestore.queries
 import cats.syntax.option._
 import com.engitano.fs2firestore.api.Query
 import com.engitano.fs2firestore.queries.QueryBuilder.{Configured, IsConfigured, PredicateBuilder, UnConfigured}
+import com.engitano.fs2firestore.syntax.{HasKey, HasProperty, ImplicitHelpers}
 import com.engitano.fs2firestore.{CollectionFor, ToFirestoreValue}
 import com.google.firestore.v1.StructuredQuery
 import com.google.firestore.v1.StructuredQuery.Filter.FilterType.{CompositeFilter, FieldFilter, UnaryFilter}
 import com.google.firestore.v1.StructuredQuery.{FieldReference, Filter}
-import shapeless.LabelledGeneric.Aux
 import shapeless._
-import shapeless.the
 import shapeless.labelled.FieldType
 import shapeless.ops.record.Keys
 
@@ -23,6 +22,12 @@ object ToFilter {
 trait ToFilter[A] {
   def to(a: A): StructuredQuery.Filter
 }
+
+object CollectionOf {
+  def apply[C]: CollectionOf[C] = new CollectionOf[C] {}
+}
+
+sealed trait CollectionOf[C]
 
 sealed trait ComparisonOp
 object ComparisonOp {
@@ -43,40 +48,10 @@ object UnaryOp {
   case object isNan  extends UnaryOp
 }
 
-object CollectionOf {
-  def apply[C] = new CollectionOf[C] {}
-}
-
-sealed trait CollectionOf[C]
-
-case class CompoundPredicate[A : ToFilter, B : ToFilter](a: A, b: B) {
+case class CompoundPredicate[A: ToFilter, B: ToFilter](a: A, b: B) {
   def filterA: ToFilter[A] = ToFilter[A]
   def filterB: ToFilter[B] = ToFilter[B]
 }
-
-trait TypedSyntax {
-  implicit def defaultHasProperty[ColRepr <: HList, K, V](implicit ev: BasisConstraint[FieldType[K, V] :: HNil, ColRepr]) =
-    new HasProperty[ColRepr, K, V] {}
-
-
-  implicit def defaultHasKey[ColRepr <: HList, TKeys <: HList, K](implicit ke: Keys.Aux[ColRepr, TKeys], ev: BasisConstraint[K :: HNil, TKeys]) =
-    new HasKey[ColRepr, K] {}
-}
-
-@implicitNotFound(
-  """Implicit not found: HasProperty[ColRepr, K, V]
-Cannot prove that your collection type contains a property with key ${K} with of value type: ${V}.
-Check query keys and types.
-Check that you have imported com.engitano.fs2firestore.queries.syntax._""")
-sealed abstract class HasProperty[ColRepr, K, V] protected ()
-
-@implicitNotFound(
-  """Implicit not found: HasKey[ColRepr, K, V]
-Cannot prove that your collection type contains a property with key ${K}.
-Check query key.
-Check that you have imported com.engitano.fs2firestore.queries.syntax._""")
-sealed abstract class HasKey[ColRepr, K] protected ()
-
 object QueryBuilder {
 
   sealed trait IsConfigured
@@ -84,34 +59,10 @@ object QueryBuilder {
   case class UnConfigured private () extends IsConfigured
 
   class PredicateBuilder[C, R <: HList](implicit lg: LabelledGeneric.Aux[C, R]) {
-    implicit def toColumnOps(s: Symbol): ColumnOps = macro QueryMacros.buildOps
-
-    trait ColumnOps {
-
-      type Col
-      val columnName: String
-
-      def :<[V: ToFirestoreValue](v: V)(implicit ev: HasProperty[R, Col, V]) =
-        Comparison(columnName, v, ComparisonOp.<)
-      def :<=[V: ToFirestoreValue](v: V)(implicit ev: HasProperty[R, Col, V]) =
-        Comparison(columnName, v, ComparisonOp.<=)
-      def =:=[V: ToFirestoreValue](v: V)(implicit ev: HasProperty[R, Col, V]) =
-        Comparison(columnName, v, ComparisonOp.==)
-      def :>=[V: ToFirestoreValue](v: V)(implicit ev: HasProperty[R, Col, V]) =
-        Comparison(columnName, v, ComparisonOp.>=)
-      def :>[V: ToFirestoreValue](v: V)(implicit ev: HasProperty[R, Col, V])=
-        Comparison(columnName, v, ComparisonOp.>)
-      def contains[V: ToFirestoreValue](v: V)(implicit ev: HasProperty[R, Col, Seq[V]]) =
-        Comparison(columnName, v, ComparisonOp.contains)
-
-      def isNull(implicit hk: HasKey[R, Col]) =
-        Unary(columnName, UnaryOp.isNull)
-      def isNan(implicit hk: HasKey[R, Col]) =
-        Unary(columnName, UnaryOp.isNan)
-    }
+    implicit def toColumnOps(s: Symbol): syntax.ColumnOps = macro QueryMacros.buildOps[R]
   }
 
-  def from[T: CollectionFor: LabelledGeneric.Aux[?,R], R <: HList](c: CollectionOf[T]) = {
+  def from[T: CollectionFor: LabelledGeneric.Aux[?, R], R <: HList](c: CollectionOf[T]) = {
     new QueryBuilder[T, R, UnConfigured](None)
   }
 }
@@ -126,7 +77,32 @@ case class QueryBuilder[Col: CollectionFor, ColRepr <: HList, HasFilter <: IsCon
   def build(implicit hf: HasFilter =:= Configured): Query[Col] = Query[Col](filter.get)
 }
 
-object syntax extends TypedSyntax {
+object syntax extends ImplicitHelpers {
+
+  trait ColumnOps {
+
+    type R <: HList
+    type Col
+    val columnName: String
+
+    def :<[V: ToFirestoreValue](v: V)(implicit ev: HasProperty[R, Col, V]) =
+      Comparison(columnName, v, ComparisonOp.<)
+    def :<=[V: ToFirestoreValue](v: V)(implicit ev: HasProperty[R, Col, V]) =
+      Comparison(columnName, v, ComparisonOp.<=)
+    def =:=[V: ToFirestoreValue](v: V)(implicit ev: HasProperty[R, Col, V]) =
+      Comparison(columnName, v, ComparisonOp.==)
+    def :>=[V: ToFirestoreValue](v: V)(implicit ev: HasProperty[R, Col, V]) =
+      Comparison(columnName, v, ComparisonOp.>=)
+    def :>[V: ToFirestoreValue](v: V)(implicit ev: HasProperty[R, Col, V]) =
+      Comparison(columnName, v, ComparisonOp.>)
+    def contains[V: ToFirestoreValue](v: V)(implicit ev: HasProperty[R, Col, Seq[V]]) =
+      Comparison(columnName, v, ComparisonOp.contains)
+
+    def isNull(implicit hk: HasKey[R, Col]) =
+      Unary(columnName, UnaryOp.isNull)
+    def isNan(implicit hk: HasKey[R, Col]) =
+      Unary(columnName, UnaryOp.isNan)
+  }
 
   implicit class PimpedFilter[A: ToFilter](a: A) {
     def &&[B: ToFilter](b: B) = CompoundPredicate(a, b)
@@ -163,12 +139,11 @@ object syntax extends TypedSyntax {
     }
   }
 
-
   implicit def compountToFilterInstance[A, B] = new ToFilter[CompoundPredicate[A, B]] {
     override def to(c: CompoundPredicate[A, B]): Filter = {
-      def buildSeq[A  : ToFilter](p: A, s: Seq[Filter]): Seq[Filter] = p match {
-        case cp@CompoundPredicate(a,b) => buildSeq(a, s)(cp.filterA) ++ buildSeq(b,s)(cp.filterB)
-        case f => ToFilter[A].to(f) +: s
+      def buildSeq[A: ToFilter](p: A, s: Seq[Filter]): Seq[Filter] = p match {
+        case cp @ CompoundPredicate(a, b) => buildSeq(a, s)(cp.filterA) ++ buildSeq(b, s)(cp.filterB)
+        case f                            => ToFilter[A].to(f) +: s
       }
       val filters = buildSeq(c.a, Seq())(c.filterA) ++ buildSeq(c.b, Seq())(c.filterB)
       StructuredQuery.Filter(CompositeFilter(StructuredQuery.CompositeFilter(StructuredQuery.CompositeFilter.Operator.AND, filters)))

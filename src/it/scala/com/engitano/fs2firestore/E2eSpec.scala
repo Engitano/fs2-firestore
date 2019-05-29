@@ -26,6 +26,7 @@ import java.util.UUID
 
 import cats.syntax._
 import cats.effect._
+import com.engitano.fs2firestore.admin.v1.{FirestoreAdminFs2, IndexBuilder}
 import com.engitano.fs2firestore.api.WriteOperation
 import com.engitano.fs2firestore.queries.{CollectionOf, QueryBuilder}
 import com.google.firestore.v1._
@@ -117,30 +118,61 @@ class E2eSpec extends WordSpec with Matchers with DockerFirestoreService with Be
       }
     }
 
-    "Streams data into firestore" ignore {
+    "Streams data into firestore" in {
       import com.engitano.fs2firestore.queries.syntax._
       import DocumentMarshaller._
       import ValueMarshaller._
-      def id         = UUID.randomUUID()
+      def id             = UUID.randomUUID()
       implicit val idFor = IdFor.fromFunction[Person](_.id.toString)
-      val people = fs2.Stream.emits[IO, WriteOperation.Update]((1 to 20).map(_ => Person(id, "Nugget", 30, None, Seq())).map(p => WriteOperation.update(p)))
-      val query = QueryBuilder.from(CollectionOf[Person]).where { pb =>
-        import pb._
-        ('name =:= "Nugget")
-      }.build
-      val write = FirestoreFs2.resource[IO](FirestoreConfig.local(DefaultGcpProject, DefaultPubsubPort)).use { client =>
-        client.write(people).compile.drain
+      val people         = fs2.Stream.emits[IO, WriteOperation.Update]((1 to 100).map(i => Person(id, "Nugget", i, None, Seq())).map(p => WriteOperation.update(p)))
+      val query = QueryBuilder
+        .from(CollectionOf[Person])
+        .where { pb =>
+          import pb._
+          ('name =:= "Nugget") &&
+          ('age :>= 90) &&
+          ('age :< 99)
+        }
+        .build
+
+      val buildIndex = FirestoreAdminFs2.resource[IO](FirestoreConfig("quoin-241210", new File("/home/mark/.config/gcloud/quoin.json"))).use { client =>
+
+        val index = IndexBuilder.withColumn(CollectionOf[Person], 'name).withColumn('age).build
+        for {
+          indexes <- client.listIndexes(CollectionFor[Person].collectionName)
+          _ <- if(indexes.exists(_.fieldsWithout__name__.sameElements(index.fieldsWithout__name__)))
+            IO.unit
+          else
+            client.createIndex(index)
+        } yield ()
       }
+      buildIndex.unsafeRunSync()
+
+      val write = FirestoreFs2
+        .resource[IO](FirestoreConfig("quoin-241210", new File("/home/mark/.config/gcloud/quoin.json")))
+        .use { client =>
+          client
+            .write(people, 30)
+            .compile
+            .drain
+        }
       write.unsafeRunSync()
 
-      val personF = FirestoreFs2.resource[IO](FirestoreConfig.local(DefaultGcpProject, DefaultPubsubPort)).use { client =>
-        client.runQuery(query).compile.toList
-      }
+      val personF = FirestoreFs2
+        .resource[IO](FirestoreConfig("quoin-241210", new File("/home/mark/.config/gcloud/quoin.json")))
+        .use { client =>
+          client.runQuery(query)
+            .compile
+            .toList
+        }
       val res = personF.unsafeRunSync()
 
-      res.collect {
-        case Right(r) => r
-      }.forall(_.name == "Nugget") shouldBe true
+      val okVals = res
+        .collect {
+          case Right(r) => r
+        }
+      okVals.nonEmpty shouldBe true
+      okVals.forall(p => p.name == "Nugget" && p.age >= 90 && p.age < 99) shouldBe true
     }
 
     "runs queries" in {
@@ -149,12 +181,15 @@ class E2eSpec extends WordSpec with Matchers with DockerFirestoreService with Be
       import DocumentMarshaller._
       val id         = UUID.randomUUID()
       val testPerson = Person(id, "Nugget", 30, None, Seq())
-      val query = QueryBuilder.from(CollectionOf[Person]).where { pb =>
-        import pb._
-        ('name =:= "Nugget") &&
+      val query = QueryBuilder
+        .from(CollectionOf[Person])
+        .where { pb =>
+          import pb._
+          ('name =:= "Nugget") &&
           ('age :> 29) &&
           ('age :< 31)
-      }.build
+        }
+        .build
       val personF = FirestoreFs2.resource[IO](FirestoreConfig.local(DefaultGcpProject, DefaultPubsubPort)).use { client =>
         val result = for {
           _      <- fs2.Stream.eval(client.createDocument(testPerson))

@@ -16,6 +16,7 @@ object Dependencies {
     "com.engitano"         %% "google-common-protos-scala"      % "0.1.8",
     "io.grpc"              % "grpc-auth"                        % "1.20.0",
     "com.google.auth"      % "google-auth-library-oauth2-http"  % "0.12.0",
+    "com.hypertino"        %% "inflector"                       % "1.0.1",
     "io.grpc"              % "grpc-netty-shaded"                % "1.20.0" % "it",
     "org.scalatest"        %% "scalatest"                       % "3.0.5" % "test, it",
     "com.whisk"            %% "docker-testkit-scalatest"        % "0.9.8" % "it",

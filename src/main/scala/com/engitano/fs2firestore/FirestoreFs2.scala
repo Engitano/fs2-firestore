@@ -23,22 +23,20 @@ package com.engitano.fs2firestore
 
 import java.util.UUID
 
-import cats.implicits._
 import cats.effect.{ConcurrentEffect, Resource, Sync}
+import cats.implicits._
 import com.engitano.fs2firestore.ValueMarshaller.UnmarshalResult
 import com.engitano.fs2firestore.api._
-import com.engitano.fs2firestore.queries.ToFilter
 import com.google.firestore.v1.BatchGetDocumentsResponse.Result
 import com.google.firestore.v1.ListDocumentsRequest.ConsistencySelector
 import com.google.firestore.v1.ListenRequest.TargetChange.AddTarget
 import com.google.firestore.v1.ListenResponse.ResponseType
 import com.google.firestore.v1.RunQueryRequest.QueryType
-import com.google.firestore.v1.StructuredQuery.{FieldReference, Filter}
-import com.google.firestore.v1.StructuredQuery.Filter.FilterType.FieldFilter
+import com.google.firestore.v1.StructuredQuery.Filter
 import com.google.firestore.v1.Target.DocumentsTarget
 import com.google.firestore.v1._
 import com.google.protobuf.ByteString
-import fs2.Stream
+import fs2.{Chunk, Stream}
 import fs2.concurrent.Queue
 import io.grpc.{Metadata, StatusRuntimeException}
 
@@ -61,7 +59,7 @@ trait FirestoreFs2[F[_]] {
   def commit(txId: ByteString, operations: Seq[WriteOperation]): F[Unit]
   def rollback(txId: ByteString): F[Unit]
   def runQuery[T: FromDocumentFields: CollectionFor](f: Query[T]): fs2.Stream[F, UnmarshalResult[T]]
-  def write(request: fs2.Stream[F, WriteOperation]): fs2.Stream[F, Unit]
+  def write(request: fs2.Stream[F, WriteOperation], chunkSize: Int): fs2.Stream[F, Unit]
   def listenForDocChanges[T: FromDocumentFields](docIds: Seq[String]): fs2.Stream[F, UnmarshalResult[DocumentChanged[T]]]
   def listCollectionIds(): F[Seq[String]]
 }
@@ -102,6 +100,8 @@ object api {
 
 object FirestoreFs2 {
 
+  import syntax._
+
   def resource[F[_]: ConcurrentEffect](cfg: FirestoreConfig): Resource[F, FirestoreFs2[F]] = {
 
     Client.create[F](cfg).map { client =>
@@ -109,26 +109,9 @@ object FirestoreFs2 {
 
         private def metadata = new Metadata()
 
-        private def rootDb = s"projects/${cfg.project}/databases/${cfg.database}"
-
-        private def rootDocuments = s"projects/${cfg.project}/databases/${cfg.database}/documents"
-
-        private def collectionPath(collectionId: String) =
-          s"${rootDocuments}/$collectionId"
-
-        private def collectionPath[T: CollectionFor]: String = collectionPath(CollectionFor[T].collectionName)
-
-        private def documentName[T: CollectionFor: IdFor](t: T): String =
-          documentName[T](IdFor[T].getId(t))
-
-        private def documentName[T: CollectionFor](id: String): String = documentName(CollectionFor[T].collectionName, id)
-
-        private def documentName(collectionId: String, id: String) =
-          s"$rootDocuments/$collectionId/$id"
-
         override def getDocument[T: FromDocumentFields: CollectionFor](docName: String): F[Option[UnmarshalResult[T]]] =
           client
-            .getDocument(GetDocumentRequest(documentName(docName)), metadata)
+            .getDocument(GetDocumentRequest(cfg.documentName(docName)), metadata)
             .map(d => FromDocumentFields[T].from(d.fields).some)
             .recover {
               case e: StatusRuntimeException if e.getMessage.contains("NOT_FOUND") => None
@@ -145,7 +128,7 @@ object FirestoreFs2 {
           client
             .listDocuments(
               new ListDocumentsRequest(
-                rootDocuments,
+                cfg.rootDocuments,
                 CollectionFor[T].collectionName,
                 pageSize.getOrElse(0),
                 pageToken.getOrElse(""),
@@ -162,7 +145,7 @@ object FirestoreFs2 {
           client
             .createDocument(
               CreateDocumentRequest(
-                rootDocuments,
+                cfg.rootDocuments,
                 CollectionFor[T].collectionName,
                 IdFor[T].getId(t),
                 Some(Document(fields = ToDocumentFields[T].to(t))),
@@ -176,7 +159,7 @@ object FirestoreFs2 {
           client
             .updateDocument(
               UpdateDocumentRequest(
-                Some(Document(documentName(t), ToDocumentFields[T].to(t)))
+                Some(Document(cfg.documentName(t), ToDocumentFields[T].to(t)))
               ),
               metadata
             )
@@ -188,7 +171,7 @@ object FirestoreFs2 {
             .as(())
 
         override def deleteDocument(collection: String, docId: String): F[Unit] =
-          deleteDocument(documentName(collection, docId))
+          deleteDocument(cfg.documentName(collection, docId))
             .as(())
 
         override def batchGetDocuments[T: FromDocumentFields: CollectionFor](docNames: List[String]): fs2.Stream[F, UnmarshalResult[T]] =
@@ -219,7 +202,7 @@ object FirestoreFs2 {
 
         override def runQuery[T: FromDocumentFields: CollectionFor](f: Query[T]): fs2.Stream[F, UnmarshalResult[T]] = {
           val q = RunQueryRequest(
-            rootDocuments,
+            cfg.rootDocuments,
             f.build
           )
           client.runQuery(q, metadata).map(r => r.document.map(d => FromDocumentFields[T].from(d.fields))).collect {
@@ -227,22 +210,23 @@ object FirestoreFs2 {
           }
         }
 
-        override def write(request: fs2.Stream[F, WriteOperation]): fs2.Stream[F, Unit] = {
+        override def write(request: fs2.Stream[F, WriteOperation], chunkSize: Int): fs2.Stream[F, Unit] = {
           Stream.eval(Queue.unbounded[F, WriteRequest]).flatMap { queue =>
-            def queueNext(w: WriteRequest): F[Unit] = {
+            def queueNext(w: WriteRequest): F[Unit] =
               queue.enqueue1(w).as(())
-            }
-            val streamIdF = Stream.eval(Sync[F].delay(UUID.randomUUID().toString))
-            val startup   = streamIdF.flatMap(sid => Stream.eval(queueNext(WriteRequest(rootDb, sid))))
-            val doWrite   = client.write(queue.dequeue, metadata)
 
-            (startup >> doWrite).zip(request).evalMap {
-              case (resp, req) => queueNext(WriteRequest(rootDb, streamToken = resp.streamToken, writes = Seq(toWrite(req))))
+            val startup = Sync[F].delay(UUID.randomUUID().toString)
+              .flatMap(sid => queueNext(WriteRequest(cfg.rootDb, sid)))
+            val doWrite = client.write(queue.dequeue, metadata).handleErrorWith {
+              case t:StatusRuntimeException if t.getStatus.getCode == io.grpc.Status.CANCELLED.getCode => Stream.empty
+              case t => Stream.raiseError[F](t)
+            }
+
+            (Stream.eval(startup) >> doWrite).zip(request.chunkN(chunkSize, true) ++ Stream.emit(Chunk.empty[WriteOperation])).evalMap {
+              case (resp, req) => queueNext(WriteRequest(cfg.rootDb, streamToken = resp.streamToken, writes = req.map(toWrite).toList))
             }
           }
-
         }
-
 
         override def listenForDocChanges[T: FromDocumentFields](docIds: Seq[String]): fs2.Stream[F, UnmarshalResult[DocumentChanged[T]]] =
           client
@@ -263,11 +247,11 @@ object FirestoreFs2 {
             }
 
         override def listCollectionIds(): F[Seq[String]] =
-          client.listCollectionIds(ListCollectionIdsRequest(rootDocuments), metadata).map(_.collectionIds)
+          client.listCollectionIds(ListCollectionIdsRequest(cfg.rootDocuments), metadata).map(_.collectionIds)
 
         private def toWrite(wo: WriteOperation): Write = wo match {
-          case WriteOperation.Update(c, id, f) => Write(operation = Write.Operation.Update(Document(name = documentName(c, id), fields = f)))
-          case WriteOperation.Delete(c, id)    => Write(operation = Write.Operation.Delete(documentName(c, id)))
+          case WriteOperation.Update(c, id, f) => Write(operation = Write.Operation.Update(Document(name = cfg.documentName(c, id), fields = f)))
+          case WriteOperation.Delete(c, id)    => Write(operation = Write.Operation.Delete(cfg.documentName(c, id)))
         }
       }
     }
