@@ -121,8 +121,9 @@ class E2eSpec extends WordSpec with Matchers with DockerFirestoreService with Be
           fred <- client.getDocument[Person](id.toString)
         } yield (nugget, fred)
       }
-      personF.unsafeRunSync()._1.get.right.get shouldBe testPerson
-      personF.unsafeRunSync()._1.get.right.get shouldBe testPerson
+      val run  = personF.unsafeRunSync()
+      run._1.get.right.get shouldBe testPerson
+      run._2.get.right.get shouldBe testPerson.copy(name = "Fred")
     }
 
     "Streams data into firestore" taggedAs WhenRemoteConfigAvailable in {
@@ -149,7 +150,7 @@ class E2eSpec extends WordSpec with Matchers with DockerFirestoreService with Be
           _ <- if(indexes.exists(_.fieldsWithout__name__.sameElements(index.fieldsWithout__name__)))
             IO.unit
           else
-            client.createIndex(index)
+            client.createIndex(CollectionFor[Person], index)
         } yield ()
       }
       buildIndex.unsafeRunSync()

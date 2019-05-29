@@ -20,7 +20,7 @@ object SymbolHelpers {
 }
 
 trait FirestoreAdminFs2[F[_]] {
-  def createIndex[C : CollectionFor, R <: HList, K<: HList](ix: IndexDefinition): F[Unit]
+  def createIndex[C, R <: HList, K<: HList](c: CollectionFor[C], ix: IndexDefinition): F[Unit]
   def listIndexes(collectionName: String): F[Seq[IndexDefinition]]
 }
 
@@ -36,11 +36,11 @@ object FirestoreAdminFs2 {
   def resource[F[_]: ConcurrentEffect](cfg: FirestoreConfig): Resource[F, FirestoreAdminFs2[F]] =
     Admin.create[F](cfg).map { client =>
       new FirestoreAdminFs2[F] {
-        override def createIndex[C : CollectionFor, R <: HList, K <: HList](ix: IndexDefinition): F[Unit] =
+        override def createIndex[C, R <: HList, K <: HList](c: CollectionFor[C], ix: IndexDefinition): F[Unit] =
           client
             .createIndex(
               CreateIndexRequest(
-                cfg.collectionGroupPath(CollectionFor[C].collectionName),
+                cfg.collectionGroupPath(c.collectionName),
                 Some(ix.toIndex)
               ),
               metadata
