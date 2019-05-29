@@ -26,9 +26,12 @@ trait FirestoreAdminFs2[F[_]] {
 
 object FirestoreAdminFs2 {
 
-  import com.engitano.fs2firestore.syntax._
+  import com.engitano.fs2firestore.constraints._
 
   private def metadata = new Metadata()
+
+  def stream[F[_]: ConcurrentEffect](cfg: FirestoreConfig): fs2.Stream[F, FirestoreAdminFs2[F]] =
+    fs2.Stream.resource(resource[F](cfg))
 
   def resource[F[_]: ConcurrentEffect](cfg: FirestoreConfig): Resource[F, FirestoreAdminFs2[F]] =
     Admin.create[F](cfg).map { client =>

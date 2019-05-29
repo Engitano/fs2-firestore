@@ -21,55 +21,15 @@
 
 package com.engitano
 
-import java.io.{File, FileInputStream}
-
 import cats.effect.{ConcurrentEffect, Resource}
-import com.google.auth.Credentials
-import com.google.auth.oauth2.GoogleCredentials
 import com.google.firestore.admin.v1.FirestoreAdminFs2Grpc
 import com.google.firestore.v1.{FirestoreFs2Grpc, Value}
-import io.grpc.{CallCredentials, CallOptions, Channel, ManagedChannel, ManagedChannelBuilder}
-import io.grpc.auth.MoreCallCredentials
+import io.grpc.{CallOptions, Channel, ManagedChannel}
 import org.lyranthe.fs2_grpc.java_runtime.implicits._
 
 package object fs2firestore {
 
   type DocumentFields = Map[String, Value]
-
-  private val FIRESTORE_SERVICE_ID = "firestore.googleapis.com"
-
-  object FirestoreConfig {
-    def local(project: String, port: Int) : FirestoreConfig =
-      new FirestoreConfig(project, s"localhost:$port", None, true)
-
-    def apply(project: String): FirestoreConfig =
-      new FirestoreConfig(project, FIRESTORE_SERVICE_ID,
-        Some(MoreCallCredentials.from(GoogleCredentials.getApplicationDefault)))
-
-    def apply(project: String, creds: File): FirestoreConfig =
-      new FirestoreConfig(project, FIRESTORE_SERVICE_ID,
-        Some(MoreCallCredentials.from(GoogleCredentials.fromStream(new FileInputStream(creds)))))
-
-    def apply(project: String, credentials: Credentials): FirestoreConfig =
-      new FirestoreConfig(project, FIRESTORE_SERVICE_ID, Some(MoreCallCredentials.from(credentials)))
-
-    def apply(project: String, credentials: CallCredentials): FirestoreConfig =
-      new FirestoreConfig(project, FIRESTORE_SERVICE_ID, Some(credentials))
-  }
-
-  case class FirestoreConfig(project: String, host: String, credentials: Option[CallCredentials], plainText: Boolean = false, database: String = "(default)") {
-
-
-    private[fs2firestore] def callOps = credentials.foldLeft(CallOptions.DEFAULT)(_ withCallCredentials _)
-    private[fs2firestore] def channelBuilder = {
-      val channel = ManagedChannelBuilder.forTarget(host)
-      if(plainText) {
-        channel.usePlaintext()
-      } else {
-        channel
-      }
-    }
-  }
 
 
   private def buildStub[F[_]: ConcurrentEffect, A[?[_]]](cfg: FirestoreConfig)(ctr: (Channel, CallOptions) => A[F]): Resource[F, A[F]] = {

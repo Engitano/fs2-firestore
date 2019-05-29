@@ -11,6 +11,7 @@ import com.google.firestore.v1.StructuredQuery.Filter.FilterType.{CompositeFilte
 import com.google.firestore.v1.{StructuredQuery, Value}
 import com.google.firestore.v1.Value.ValueTypeOneof.{GeoPointValue, IntegerValue, NullValue, StringValue}
 import org.scalatest.{Matchers, WordSpec}
+import com.engitano.fs2firestore.implicits._
 
 class QuerySpec extends WordSpec with Matchers {
 
@@ -20,7 +21,7 @@ class QuerySpec extends WordSpec with Matchers {
       import ValueMarshaller._
       import com.engitano.fs2firestore.queries.syntax._
 
-      val nameQuery = QueryBuilder.from(CollectionOf[QueryTest]).where { pb =>
+      val nameQuery = QueryBuilder.from(CollectionFor[QueryTest]).where { pb =>
         import pb._
         ('id =:= "Nugget") &&
         ('name isNull) &&
@@ -29,7 +30,7 @@ class QuerySpec extends WordSpec with Matchers {
         ('kids contains "Iz")
       }
 
-      nameQuery.build shouldBe Query[Person](
+      nameQuery.build shouldBe Query[QueryTest](
         Filter(
           CompositeFilter(
             StructuredQuery.CompositeFilter(
@@ -55,7 +56,7 @@ class QuerySpec extends WordSpec with Matchers {
       assertCompiles("""
         import ValueMarshaller._
         import com.engitano.fs2firestore.queries.syntax._
-        val nameQuery = QueryBuilder.from(CollectionOf[QueryTest]).where { pb =>
+        val nameQuery = QueryBuilder.from(CollectionFor[QueryTest]).where { pb =>
           import pb._
           ('name =:= "Nugget")
         }
@@ -64,7 +65,7 @@ class QuerySpec extends WordSpec with Matchers {
       assertDoesNotCompile("""
         import ValueMarshaller._
         import com.engitano.fs2firestore.queries.syntax._
-        val nameQuery = QueryBuilder.from(CollectionOf[QueryTest]).where { pb =>
+        val nameQuery = QueryBuilder.from(CollectionFor[QueryTest]).where { pb =>
           import pb._
           ('names =:= "Nugget")
         }
@@ -73,7 +74,7 @@ class QuerySpec extends WordSpec with Matchers {
       assertCompiles("""
         import ValueMarshaller._
         import com.engitano.fs2firestore.queries.syntax._
-        val nameQuery = QueryBuilder.from(CollectionOf[QueryTest]).where { pb =>
+        val nameQuery = QueryBuilder.from(CollectionFor[QueryTest]).where { pb =>
           import pb._
           ('age isNull)
         }
@@ -82,7 +83,7 @@ class QuerySpec extends WordSpec with Matchers {
       assertDoesNotCompile("""
         import ValueMarshaller._
         import com.engitano.fs2firestore.queries.syntax._
-        val nameQuery = QueryBuilder.from(CollectionOf[QueryTest]).where { pb =>
+        val nameQuery = QueryBuilder.from(CollectionFor[QueryTest]).where { pb =>
           import pb._
           ('ages isNull)
         }

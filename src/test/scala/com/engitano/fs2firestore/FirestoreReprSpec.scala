@@ -4,7 +4,7 @@ import java.util.UUID
 
 import com.google.`type`.LatLng
 import org.scalatest.{Matchers, WordSpec}
-
+import com.engitano.fs2firestore.implicits._
 
 
 class FirestoreReprSpec extends WordSpec with Matchers {

@@ -100,7 +100,10 @@ object api {
 
 object FirestoreFs2 {
 
-  import syntax._
+  import constraints._
+
+  def stream[F[_]: ConcurrentEffect](cfg: FirestoreConfig): Stream[F, FirestoreFs2[F]] =
+    Stream.resource(resource[F](cfg))
 
   def resource[F[_]: ConcurrentEffect](cfg: FirestoreConfig): Resource[F, FirestoreFs2[F]] = {
 

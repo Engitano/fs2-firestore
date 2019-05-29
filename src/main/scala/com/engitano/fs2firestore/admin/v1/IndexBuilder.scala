@@ -2,8 +2,7 @@ package com.engitano.fs2firestore.admin.v1
 
 import com.engitano.fs2firestore.CollectionFor
 import com.engitano.fs2firestore.admin.v1.IndexBuilder._
-import com.engitano.fs2firestore.queries.CollectionOf
-import com.engitano.fs2firestore.syntax.{HasKey, NotHasKey}
+import com.engitano.fs2firestore.constraints.{HasKey, NotHasKey}
 import shapeless.{::, HList, HNil, LabelledGeneric, Witness}
 
 case class IndexDefinition(fields: Seq[IndexFieldDefinition]) {
@@ -18,7 +17,7 @@ object IndexBuilder {
   case class UnConfigured() extends IsConfigured
 
   def withColumn[Collection: CollectionFor, K, Repr <: HList](
-      cf: CollectionOf[Collection],
+      cf: CollectionFor[Collection],
       w: Witness.Aux[K],
       descending: Boolean = false
   )(implicit gen: LabelledGeneric.Aux[Collection, Repr], hk: HasKey[Repr, K]): IndexBuilder[Collection, Repr, w.T :: HNil, UnConfigured] = {

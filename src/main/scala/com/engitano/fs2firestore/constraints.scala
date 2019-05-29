@@ -6,31 +6,7 @@ import shapeless.ops.record.Keys
 
 import scala.annotation.implicitNotFound
 
-object syntax {
-
-  implicit def pathHelpersFromConfig(cfg: FirestoreConfig) = new PathHelpers(cfg)
-
-  private[fs2firestore] class PathHelpers(cfg: FirestoreConfig) {
-    def rootDb = s"projects/${cfg.project}/databases/${cfg.database}"
-
-    def rootDocuments = s"projects/${cfg.project}/databases/${cfg.database}/documents"
-
-    def collectionGroupPath(collectionId: String) =
-      s"$rootDb/collectionGroups/$collectionId"
-
-    def collectionPath(collectionId: String) =
-      s"${rootDocuments}/$collectionId"
-
-    def collectionPath[T: CollectionFor]: String = collectionPath(CollectionFor[T].collectionName)
-
-    def documentName[T: CollectionFor : IdFor](t: T): String =
-      documentName[T](IdFor[T].getId(t))
-
-    def documentName[T: CollectionFor](id: String): String = documentName(CollectionFor[T].collectionName, id)
-
-    def documentName(collectionId: String, id: String) =
-      s"$rootDocuments/$collectionId/$id"
-  }
+object constraints {
 
   trait ImplicitHelpers {
     implicit def defaultHasProperty[ColRepr <: HList, K, V](implicit ev: BasisConstraint[FieldType[K, V] :: HNil, ColRepr]) =

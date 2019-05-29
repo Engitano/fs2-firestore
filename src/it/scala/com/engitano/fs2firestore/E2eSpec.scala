@@ -24,21 +24,28 @@ package com.engitano.fs2firestore
 import java.io.File
 import java.util.UUID
 
-import cats.syntax._
 import cats.effect._
+import cats.implicits._
 import com.engitano.fs2firestore.admin.v1.{FirestoreAdminFs2, IndexBuilder}
 import com.engitano.fs2firestore.api.WriteOperation
-import com.engitano.fs2firestore.queries.{CollectionOf, QueryBuilder}
+import com.engitano.fs2firestore.implicits._
+import com.engitano.fs2firestore.queries.QueryBuilder
 import com.google.firestore.v1._
 import com.spotify.docker.client.{DefaultDockerClient, DockerClient}
 import com.whisk.docker.impl.spotify.SpotifyDockerFactory
 import com.whisk.docker.{DockerContainer, DockerFactory, DockerKit, DockerReadyChecker}
 import io.grpc.Metadata
-import org.scalatest.{BeforeAndAfterAll, Matchers, WordSpec}
+import org.scalatest._
+
+import com.engitano.fs2firestore.queries.syntax._
 
 import scala.concurrent.ExecutionContext
+import scala.util.Try
 
 class E2eSpec extends WordSpec with Matchers with DockerFirestoreService with BeforeAndAfterAll {
+
+  val remoteConfig = (Option(System.getenv("GCP_PROJECT")), Try(new File(System.getenv("GCP_CREDENTIALS"))).toOption).mapN((proj, file) => FirestoreConfig(proj, file))
+  object WhenRemoteConfigAvailable extends Tag(if (remoteConfig.isDefined) "" else classOf[Ignore].getName)
 
   implicit val contextShift: ContextShift[IO] =
     IO.contextShift(ExecutionContext.global)
@@ -95,7 +102,6 @@ class E2eSpec extends WordSpec with Matchers with DockerFirestoreService with Be
 
   "The high level client" should {
     "return None when no document exists in a collection" in {
-      import DocumentMarshaller._
       val personF = FirestoreFs2.resource[IO](FirestoreConfig.local(DefaultGcpProject, DefaultPubsubPort)).use { client =>
         client.getDocument[Person]("freddo")
       }
@@ -104,7 +110,6 @@ class E2eSpec extends WordSpec with Matchers with DockerFirestoreService with Be
     }
 
     "save and read and update" in {
-      import DocumentMarshaller._
       val id         = UUID.randomUUID()
       val testPerson = Person(id, "Nugget", 30, None, Seq())
       val personF = FirestoreFs2.resource[IO](FirestoreConfig.local(DefaultGcpProject, DefaultPubsubPort)).use { client =>
@@ -116,17 +121,16 @@ class E2eSpec extends WordSpec with Matchers with DockerFirestoreService with Be
           fred <- client.getDocument[Person](id.toString)
         } yield (nugget, fred)
       }
+      personF.unsafeRunSync()._1.get.right.get shouldBe testPerson
+      personF.unsafeRunSync()._1.get.right.get shouldBe testPerson
     }
 
-    "Streams data into firestore" in {
-      import com.engitano.fs2firestore.queries.syntax._
-      import DocumentMarshaller._
-      import ValueMarshaller._
+    "Streams data into firestore" taggedAs WhenRemoteConfigAvailable in {
       def id             = UUID.randomUUID()
       implicit val idFor = IdFor.fromFunction[Person](_.id.toString)
       val people         = fs2.Stream.emits[IO, WriteOperation.Update]((1 to 100).map(i => Person(id, "Nugget", i, None, Seq())).map(p => WriteOperation.update(p)))
       val query = QueryBuilder
-        .from(CollectionOf[Person])
+        .from(CollectionFor[Person])
         .where { pb =>
           import pb._
           ('name =:= "Nugget") &&
@@ -135,9 +139,11 @@ class E2eSpec extends WordSpec with Matchers with DockerFirestoreService with Be
         }
         .build
 
-      val buildIndex = FirestoreAdminFs2.resource[IO](FirestoreConfig("quoin-241210", new File("/home/mark/.config/gcloud/quoin.json"))).use { client =>
+      val buildIndex = FirestoreAdminFs2
+        .resource[IO](remoteConfig.get)
+        .use { client =>
 
-        val index = IndexBuilder.withColumn(CollectionOf[Person], 'name).withColumn('age).build
+        val index = IndexBuilder.withColumn(CollectionFor[Person], 'name).withColumn('age).build
         for {
           indexes <- client.listIndexes(CollectionFor[Person].collectionName)
           _ <- if(indexes.exists(_.fieldsWithout__name__.sameElements(index.fieldsWithout__name__)))
@@ -149,7 +155,7 @@ class E2eSpec extends WordSpec with Matchers with DockerFirestoreService with Be
       buildIndex.unsafeRunSync()
 
       val write = FirestoreFs2
-        .resource[IO](FirestoreConfig("quoin-241210", new File("/home/mark/.config/gcloud/quoin.json")))
+        .resource[IO](remoteConfig.get)
         .use { client =>
           client
             .write(people, 30)
@@ -159,7 +165,7 @@ class E2eSpec extends WordSpec with Matchers with DockerFirestoreService with Be
       write.unsafeRunSync()
 
       val personF = FirestoreFs2
-        .resource[IO](FirestoreConfig("quoin-241210", new File("/home/mark/.config/gcloud/quoin.json")))
+        .resource[IO](remoteConfig.get)
         .use { client =>
           client.runQuery(query)
             .compile
@@ -176,21 +182,21 @@ class E2eSpec extends WordSpec with Matchers with DockerFirestoreService with Be
     }
 
     "runs queries" in {
-      import com.engitano.fs2firestore.queries.syntax._
-      import ValueMarshaller._
-      import DocumentMarshaller._
       val id         = UUID.randomUUID()
       val testPerson = Person(id, "Nugget", 30, None, Seq())
-      val query = QueryBuilder
-        .from(CollectionOf[Person])
-        .where { pb =>
-          import pb._
-          ('name =:= "Nugget") &&
-          ('age :> 29) &&
-          ('age :< 31)
-        }
-        .build
+
       val personF = FirestoreFs2.resource[IO](FirestoreConfig.local(DefaultGcpProject, DefaultPubsubPort)).use { client =>
+
+        val query = QueryBuilder
+          .from(CollectionFor[Person])
+          .where { pb =>
+            import pb._
+            ('name =:= "Nugget") &&
+              ('age :> 29) &&
+              ('age :< 31)
+          }
+          .build
+
         val result = for {
           _      <- fs2.Stream.eval(client.createDocument(testPerson))
           nugget <- client.runQuery(query)
