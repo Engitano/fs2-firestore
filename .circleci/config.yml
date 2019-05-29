@@ -17,7 +17,7 @@ jobs:
       - run:
           command: |
             echo $GCP_CREDENTIALS_64 | base64 -d > ~/fs2-firestore/gcp_creds.json
-            export GCP_CREDENTIALS="~/fs2-firestore/gcp_creds.json"
+            export GCP_CREDENTIALS="/root/fs2-firestore/gcp_creds.json"
             export GCP_PROJECT=test-firestore-fs2
             sbt ";set Global / patchVersion := Some(\"$CIRCLE_BUILD_NUM\");coverage;test;it:test;coverageReport;publish;writeVersion"
       - run: git tag $(cat ./version.txt) && git push --tags
