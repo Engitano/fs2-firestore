@@ -34,19 +34,50 @@ Firestore FS2 makes heavy use of Shapeless to ensure type safety in query defini
 For examples see [QuerySpec.scala](./src/test//scala/com/engitano/fs2firestore/QuerySpec.scala)
 
 ```scala
-val query = QueryBuilder
-              .from(CollectionFor[Person])
-              .where { pb =>
-                import pb._
-                ('name =:= "Nugget") &&
-                  ('age :> 29) &&
-                  ('age :< 31)
-              }
-              .build
-val nuggetStream = client.runQuery(query)
-nuggetStream.compile.toList.unsafeRunSync().head should matchPattern {
-  case Some(Right(Person(_, "Nugget", _, _))) =>
-}
+"QueryBuild" should {
+    "build compile a valid query" in {
+
+      val nameQuery = QueryBuilder
+        .from(CollectionFor[QueryTest])
+        .addOrderBy('name)
+        .addOrderBy('age)
+        .withStartAt(('name ->> "Alpha") :: ('age ->> Some(1)) :: HNil)
+        .withEndAt(('name ->> "Zeta") :: ('age ->> Some(25)) :: HNil)
+        .where({ pb =>
+          import pb._
+          ('name =:= "Nugget") &&
+          ('age isNull) &&
+          ('kids contains "Iz")
+        })
+
+      nameQuery.build shouldBe Query[QueryTest](
+        Some(
+          Filter(
+            CompositeFilter(
+              StructuredQuery.CompositeFilter(
+                AND,
+                List(
+                  Filter(FieldFilter(StructuredQuery.FieldFilter(Some(FieldReference("name")), EQUAL, Some(Value(StringValue("Nugget")))))),
+                  Filter(
+                    UnaryFilter(
+                      StructuredQuery
+                        .UnaryFilter(StructuredQuery.UnaryFilter.Operator.IS_NULL, StructuredQuery.UnaryFilter.OperandType.Field(FieldReference("age")))
+                    )
+                  ),
+                  Filter(FieldFilter(StructuredQuery.FieldFilter(Some(FieldReference("kids")), ARRAY_CONTAINS, Some(Value(StringValue("Iz"))))))
+                )
+              )
+            )
+          )
+        ),
+        Seq(FieldOrder("name", false), FieldOrder("age", false)),
+        Seq(Value(StringValue("Alpha")), Value(IntegerValue(1))),
+        Seq(Value(StringValue("Zeta")), Value(IntegerValue(25))),
+        None,
+        None
+      )
+    }
+  }
 
 ```
 

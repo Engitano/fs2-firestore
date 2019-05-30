@@ -20,7 +20,6 @@ class QuerySpec extends WordSpec with Matchers {
   "QueryBuild" should {
     "build compile a valid query" in {
 
-
       val nameQuery = QueryBuilder
         .from(CollectionFor[QueryTest])
         .addOrderBy('name)
@@ -30,8 +29,8 @@ class QuerySpec extends WordSpec with Matchers {
         .where({ pb =>
           import pb._
           ('name =:= "Nugget") &&
-            ('age isNull) &&
-            ('kids contains "Iz")
+          ('age isNull) &&
+          ('kids contains "Iz")
         })
 
       nameQuery.build shouldBe Query[QueryTest](
@@ -65,16 +64,14 @@ class QuerySpec extends WordSpec with Matchers {
   "PredicateBuilder constraints" should {
     "Not compile invalid property names" when {
       "using conditional operators" in {
-        assertCompiles(
-          """
+        assertCompiles("""
         val nameQuery = QueryBuilder.from(CollectionFor[QueryTest]).where { pb =>
           import pb._
           ('name =:= "Nugget")
         }
       """)
 
-        assertDoesNotCompile(
-          """
+        assertDoesNotCompile("""
         val nameQuery = QueryBuilder.from(CollectionFor[QueryTest]).where { pb =>
           import pb._
           ('names =:= "Nugget")
@@ -102,16 +99,14 @@ class QuerySpec extends WordSpec with Matchers {
     "Not compile invalid types" when {
       "using conditional operators" in {
 
-        assertCompiles(
-          """
+        assertCompiles("""
         val nameQuery = QueryBuilder.from(CollectionFor[QueryTest]).where { pb =>
           import pb._
           ('name =:= "Nugget")
         }
       """)
 
-        assertDoesNotCompile(
-          """
+        assertDoesNotCompile("""
         val nameQuery = QueryBuilder.from(CollectionFor[QueryTest]).where { pb =>
           import pb._
           ('name =:= 123)
