@@ -34,8 +34,8 @@ Firestore FS2 makes heavy use of Shapeless to ensure type safety in query defini
 For examples see [QuerySpec.scala](./src/test//scala/com/engitano/fs2firestore/QuerySpec.scala)
 
 ```scala
-"QueryBuild" should {
-    "build compile a valid query" in {
+"QueryBuilder" should {
+    "build a valid query" in {
 
       val nameQuery = QueryBuilder
         .from(CollectionFor[QueryTest])

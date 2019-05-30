@@ -13,7 +13,10 @@ import scala.concurrent.duration.FiniteDuration
 
 trait FirestoreAdminFs2[F[_]] {
   def createIndex[C, R <: HList, K <: HList](c: CollectionFor[C], ix: IndexDefinition): F[Unit]
-  def listIndexes(collectionName: String): F[Seq[IndexDefinition]]
+  def listIndexes[T: CollectionFor](): F[Seq[IndexDefinition]]
+  def waitForIndex[T](c: CollectionFor[T], indexDefinition: IndexDefinition, pollInterval: FiniteDuration, timeout: FiniteDuration)(
+    implicit T: Timer[F]
+  ): F[Unit]
 }
 
 case class IndexNotFoundException(ix: IndexDefinition)         extends Exception
@@ -43,12 +46,12 @@ object FirestoreAdminFs2 {
             )
             .as(())
 
-        override def listIndexes(collectionName: String): F[Seq[IndexDefinition]] =
+        override def listIndexes[T: CollectionFor](): F[Seq[IndexDefinition]] =
           client
-            .listIndexes(ListIndexesRequest(cfg.collectionGroupPath(collectionName)), metadata)
+            .listIndexes(ListIndexesRequest(cfg.collectionGroupPath(CollectionFor[T].collectionName)), metadata)
             .map(_.indexes.map(_.toIndexDef))
 
-        def waitForIndex[T](c: CollectionFor[T], indexDefinition: IndexDefinition, pollInterval: FiniteDuration, timeout: FiniteDuration)(
+        override def waitForIndex[T](c: CollectionFor[T], indexDefinition: IndexDefinition, pollInterval: FiniteDuration, timeout: FiniteDuration)(
             implicit T: Timer[F]
         ): F[Unit] =
           if (timeout.toMillis <= 0) {

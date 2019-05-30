@@ -1,3 +1,3 @@
 package com.engitano.fs2firestore
 
-object implicits extends marshalling
+object implicits extends marshalling with LowPriorityIdFor

@@ -7,4 +7,4 @@ import com.google.`type`.LatLng
 case class QueryTest(id: String, name: String, age: Option[Int], kids: Seq[String])
 
 
-case class Person(id: UUID, name: String, isFemale: Option[Boolean], homeLocation: LatLng, kids: Seq[Person])
+case class TestPerson(id: UUID, name: String, isFemale: Option[Boolean], homeLocation: LatLng, kids: Seq[TestPerson])

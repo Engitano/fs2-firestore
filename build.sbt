@@ -41,7 +41,8 @@ lazy val `fs2-firestore` = (project in file("."))
     ),
     scalapbCodeGeneratorOptions += CodeGeneratorOption.FlatPackage,
     Compile / PB.targets := scalapbCodeGenerators.value,
-    addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full)
+    addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full),
+    parallelExecution in IntegrationTest := false,
   )
 .enablePlugins(Fs2Grpc)
 
