@@ -1,6 +1,6 @@
 package com.engitano.fs2firestore.admin.v1
 
-import cats.effect.{ConcurrentEffect, Resource}
+import cats.effect.{ConcurrentEffect, Resource, Sync, Timer}
 import cats.implicits._
 import com.engitano.fs2firestore.{Admin, CollectionFor, FirestoreConfig}
 import com.google.firestore.admin.v1.Index.IndexField
@@ -8,21 +8,17 @@ import com.google.firestore.admin.v1.{CreateIndexRequest, Index, ListIndexesRequ
 import io.grpc.Metadata
 import shapeless.{HList, Witness}
 
-object SymbolHelpers {
-  def keyOf[A](implicit wt:Witness.Aux[A]):String = asKeyName(wt.value)
-
-  def asKeyName(a:Any):String = {
-    a match {
-      case sym:Symbol => sym.name
-      case other => other.toString
-    }
-  }
-}
+import scala.concurrent.duration._
+import scala.concurrent.duration.FiniteDuration
 
 trait FirestoreAdminFs2[F[_]] {
-  def createIndex[C, R <: HList, K<: HList](c: CollectionFor[C], ix: IndexDefinition): F[Unit]
+  def createIndex[C, R <: HList, K <: HList](c: CollectionFor[C], ix: IndexDefinition): F[Unit]
   def listIndexes(collectionName: String): F[Seq[IndexDefinition]]
 }
+
+case class IndexNotFoundException(ix: IndexDefinition)         extends Exception
+case class IndexInBadStateException(state: Index.State)        extends Exception
+case class WaitForIndexTimeoutException(name: IndexDefinition) extends Exception
 
 object FirestoreAdminFs2 {
 
@@ -48,8 +44,32 @@ object FirestoreAdminFs2 {
             .as(())
 
         override def listIndexes(collectionName: String): F[Seq[IndexDefinition]] =
-          client.listIndexes(ListIndexesRequest(cfg.collectionGroupPath(collectionName)), metadata)
+          client
+            .listIndexes(ListIndexesRequest(cfg.collectionGroupPath(collectionName)), metadata)
             .map(_.indexes.map(_.toIndexDef))
+
+        def waitForIndex[T](c: CollectionFor[T], indexDefinition: IndexDefinition, pollInterval: FiniteDuration, timeout: FiniteDuration)(
+            implicit T: Timer[F]
+        ): F[Unit] =
+          if (timeout.toMillis <= 0) {
+            Sync[F].raiseError(WaitForIndexTimeoutException(indexDefinition))
+          } else {
+            getIndexes(c.collectionName).flatMap { ixs =>
+              ixs.indexes
+                .find(_.toIndexDef.fieldsWithout__name__.sameElements(indexDefinition.fieldsWithout__name__))
+                .toRight(IndexNotFoundException(indexDefinition))
+                .liftTo[F]
+            } flatMap { ix =>
+              ix.state match {
+                case Index.State.READY    => Sync[F].delay(())
+                case Index.State.CREATING => T.sleep(pollInterval).flatMap(_ => waitForIndex(c, indexDefinition, pollInterval, timeout - pollInterval))
+                case s: Index.State       => Sync[F].raiseError(IndexInBadStateException(s))
+              }
+            }
+          }
+
+        private def getIndexes(collectionName: String) =
+          client.listIndexes(ListIndexesRequest(cfg.collectionGroupPath(collectionName)), metadata)
       }
     }
 
@@ -70,9 +90,13 @@ object FirestoreAdminFs2 {
   }
 
   private implicit class PimpedIndexFieldDef(ixf: IndexFieldDefinition) {
-    def indexField: IndexField = IndexField(ixf.name, if(ixf.isDescending)
-      IndexField.ValueMode.Order(IndexField.Order.DESCENDING)
-    else
-      IndexField.ValueMode.Order(IndexField.Order.ASCENDING))
+    def indexField: IndexField =
+      IndexField(
+        ixf.name,
+        if (ixf.isDescending)
+          IndexField.ValueMode.Order(IndexField.Order.DESCENDING)
+        else
+          IndexField.ValueMode.Order(IndexField.Order.ASCENDING)
+      )
   }
 }

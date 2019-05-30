@@ -26,6 +26,7 @@ import com.google.firestore.admin.v1.FirestoreAdminFs2Grpc
 import com.google.firestore.v1.{FirestoreFs2Grpc, Value}
 import io.grpc.{CallOptions, Channel, ManagedChannel}
 import org.lyranthe.fs2_grpc.java_runtime.implicits._
+import shapeless.Witness
 
 package object fs2firestore {
 
@@ -48,5 +49,16 @@ package object fs2firestore {
   object Admin {
     def create[F[_]: ConcurrentEffect](cfg: FirestoreConfig): Resource[F, FirestoreAdminFs2Grpc[F, io.grpc.Metadata]] =
       buildStub[F, FirestoreAdminFs2Grpc[?[_],io.grpc.Metadata]](cfg)((ch, o) => FirestoreAdminFs2Grpc.stub[F](ch, o))
+  }
+
+  private[fs2firestore] object SymbolHelpers {
+    def keyOf[A](implicit wt: Witness.Aux[A]): String = asKeyName(wt.value)
+
+    def asKeyName(a: Any): String = {
+      a match {
+        case sym: Symbol => sym.name
+        case other       => other.toString
+      }
+    }
   }
 }

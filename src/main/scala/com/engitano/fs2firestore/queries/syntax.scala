@@ -6,6 +6,7 @@ import com.google.firestore.v1.StructuredQuery
 import com.google.firestore.v1.StructuredQuery.Filter.FilterType.{CompositeFilter, FieldFilter, UnaryFilter}
 import com.google.firestore.v1.StructuredQuery.{FieldReference, Filter}
 import shapeless.HList
+import shapeless.record._
 
 object syntax extends ImplicitHelpers {
 

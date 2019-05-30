@@ -1,6 +1,6 @@
 package com.engitano.fs2firestore.admin.v1
 
-import com.engitano.fs2firestore.CollectionFor
+import com.engitano.fs2firestore.{CollectionFor, SymbolHelpers}
 import com.engitano.fs2firestore.admin.v1.IndexBuilder._
 import com.engitano.fs2firestore.constraints.{HasKey, NotHasKey}
 import shapeless.{::, HList, HNil, LabelledGeneric, Witness}

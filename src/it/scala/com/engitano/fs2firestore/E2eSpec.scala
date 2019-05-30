@@ -44,7 +44,8 @@ import scala.util.Try
 
 class E2eSpec extends WordSpec with Matchers with DockerFirestoreService with BeforeAndAfterAll {
 
-  val remoteConfig = (Option(System.getenv("GCP_PROJECT")), Try(new File(System.getenv("GCP_CREDENTIALS"))).toOption).mapN((proj, file) => FirestoreConfig(proj, file))
+  val remoteConfig =
+    (Option(System.getenv("GCP_PROJECT")), Try(new File(System.getenv("GCP_CREDENTIALS"))).toOption).mapN((proj, file) => FirestoreConfig(proj, file))
   object WhenRemoteConfigAvailable extends Tag(if (remoteConfig.isDefined) "" else classOf[Ignore].getName)
 
   implicit val contextShift: ContextShift[IO] =
@@ -121,7 +122,7 @@ class E2eSpec extends WordSpec with Matchers with DockerFirestoreService with Be
           fred <- client.getDocument[Person](id.toString)
         } yield (nugget, fred)
       }
-      val run  = personF.unsafeRunSync()
+      val run = personF.unsafeRunSync()
       run._1.get.right.get shouldBe testPerson
       run._2.get.right.get shouldBe testPerson.copy(name = "Fred")
     }
@@ -143,16 +144,15 @@ class E2eSpec extends WordSpec with Matchers with DockerFirestoreService with Be
       val buildIndex = FirestoreAdminFs2
         .resource[IO](remoteConfig.get)
         .use { client =>
-
-        val index = IndexBuilder.withColumn(CollectionFor[Person], 'name).withColumn('age).build
-        for {
-          indexes <- client.listIndexes(CollectionFor[Person].collectionName)
-          _ <- if(indexes.exists(_.fieldsWithout__name__.sameElements(index.fieldsWithout__name__)))
-            IO.unit
-          else
-            client.createIndex(CollectionFor[Person], index)
-        } yield ()
-      }
+          val index = IndexBuilder.withColumn(CollectionFor[Person], 'name).withColumn('age).build
+          for {
+            indexes <- client.listIndexes(CollectionFor[Person].collectionName)
+            _ <- if (indexes.exists(_.fieldsWithout__name__.sameElements(index.fieldsWithout__name__)))
+              IO.unit
+            else
+              client.createIndex(CollectionFor[Person], index)
+          } yield ()
+        }
       buildIndex.unsafeRunSync()
 
       val write = FirestoreFs2
@@ -168,9 +168,7 @@ class E2eSpec extends WordSpec with Matchers with DockerFirestoreService with Be
       val personF = FirestoreFs2
         .resource[IO](remoteConfig.get)
         .use { client =>
-          client.runQuery(query)
-            .compile
-            .toList
+          client.runQuery(query).compile.toList
         }
       val res = personF.unsafeRunSync()
 
@@ -187,14 +185,13 @@ class E2eSpec extends WordSpec with Matchers with DockerFirestoreService with Be
       val testPerson = Person(id, "Nugget", 30, None, Seq())
 
       val personF = FirestoreFs2.resource[IO](FirestoreConfig.local(DefaultGcpProject, DefaultPubsubPort)).use { client =>
-
         val query = QueryBuilder
           .from(CollectionFor[Person])
           .where { pb =>
             import pb._
             ('name =:= "Nugget") &&
-              ('age :> 29) &&
-              ('age :< 31)
+            ('age :> 29) &&
+            ('age :< 31)
           }
           .build
 

@@ -32,7 +32,7 @@ Check that you have imported com.engitano.fs2firestore.queries.syntax._""")
   sealed abstract class HasKey[ColRepr, K] protected ()
 
   @implicitNotFound("""Implicit not found: NotHasKey[ColRepr, K, V]
-Cannot prove that your collection does not already contains a property with key ${K}.
+Cannot prove that your collection does not already contain a property with key ${K}.
 Check all index keys.
 Check that you have imported com.engitano.fs2firestore.queries.syntax._""")
   sealed abstract class NotHasKey[Keys, K] protected ()

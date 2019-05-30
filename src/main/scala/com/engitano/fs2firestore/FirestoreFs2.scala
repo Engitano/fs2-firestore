@@ -27,6 +27,7 @@ import cats.effect.{ConcurrentEffect, Resource, Sync}
 import cats.implicits._
 import com.engitano.fs2firestore.ValueMarshaller.UnmarshalResult
 import com.engitano.fs2firestore.api._
+import com.engitano.fs2firestore.queries.FieldOrder
 import com.google.firestore.v1.BatchGetDocumentsResponse.Result
 import com.google.firestore.v1.ListDocumentsRequest.ConsistencySelector
 import com.google.firestore.v1.ListenRequest.TargetChange.AddTarget
@@ -66,12 +67,27 @@ trait FirestoreFs2[F[_]] {
 
 object api {
 
-  case class Query[T: CollectionFor](predicate: Filter) {
+  case class Query[T: CollectionFor](predicate: Option[Filter],
+                                     orderBy: Seq[FieldOrder],
+                                     startAt: Seq[Value],
+                                     endAt: Seq[Value],
+                                     offset: Option[Int],
+                                     skip: Option[Int]
+                                     ) {
     def build = QueryType.StructuredQuery(
       StructuredQuery(
         None,
         Seq(StructuredQuery.CollectionSelector(CollectionFor[T].collectionName)),
-        Some(predicate)
+        predicate,
+        orderBy.map(
+          p =>
+            StructuredQuery.Order(
+              Some(StructuredQuery.FieldReference(p.name)),
+              if (p.isDescending) StructuredQuery.Direction.DESCENDING
+              else StructuredQuery.Direction.ASCENDING
+            )
+        ),
+        Some(Cursor(startAt))
       )
     )
   }
@@ -218,11 +234,12 @@ object FirestoreFs2 {
             def queueNext(w: WriteRequest): F[Unit] =
               queue.enqueue1(w).as(())
 
-            val startup = Sync[F].delay(UUID.randomUUID().toString)
+            val startup = Sync[F]
+              .delay(UUID.randomUUID().toString)
               .flatMap(sid => queueNext(WriteRequest(cfg.rootDb, sid)))
             val doWrite = client.write(queue.dequeue, metadata).handleErrorWith {
-              case t:StatusRuntimeException if t.getStatus.getCode == io.grpc.Status.CANCELLED.getCode => Stream.empty
-              case t => Stream.raiseError[F](t)
+              case t: StatusRuntimeException if t.getStatus.getCode == io.grpc.Status.CANCELLED.getCode => Stream.empty
+              case t                                                                                    => Stream.raiseError[F](t)
             }
 
             (Stream.eval(startup) >> doWrite).zip(request.chunkN(chunkSize, true) ++ Stream.emit(Chunk.empty[WriteOperation])).evalMap {
