@@ -36,7 +36,8 @@ import com.whisk.docker.impl.spotify.SpotifyDockerFactory
 import com.whisk.docker.{DockerContainer, DockerFactory, DockerKit, DockerReadyChecker}
 import io.grpc.Metadata
 import org.scalatest._
-
+import shapeless.syntax.singleton._
+import shapeless.HNil
 import com.engitano.fs2firestore.queries.syntax._
 
 import scala.concurrent.ExecutionContext
@@ -133,12 +134,14 @@ class E2eSpec extends WordSpec with Matchers with DockerFirestoreService with Be
       val people         = fs2.Stream.emits[IO, WriteOperation.Update]((1 to 100).map(i => Person(id, "Nugget", i, None, Seq())).map(p => WriteOperation.update(p)))
       val query = QueryBuilder
         .from(CollectionFor[Person])
-        .where { pb =>
+        .where({ pb =>
           import pb._
           ('name =:= "Nugget") &&
           ('age :>= 90) &&
           ('age :< 99)
-        }
+        })
+        .addOrderBy('age)
+        .withStartAt(('age ->> 95) :: HNil)
         .build
 
       val buildIndex = FirestoreAdminFs2
@@ -177,7 +180,7 @@ class E2eSpec extends WordSpec with Matchers with DockerFirestoreService with Be
           case Right(r) => r
         }
       okVals.nonEmpty shouldBe true
-      okVals.forall(p => p.name == "Nugget" && p.age >= 90 && p.age < 99) shouldBe true
+      okVals.forall(p => p.name == "Nugget" && p.age >= 95 && p.age < 99) shouldBe true
     }
 
     "runs queries" in {

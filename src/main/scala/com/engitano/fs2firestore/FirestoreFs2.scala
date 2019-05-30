@@ -87,7 +87,8 @@ object api {
               else StructuredQuery.Direction.ASCENDING
             )
         ),
-        Some(Cursor(startAt))
+        startAt.headOption.map(_ => Cursor(startAt)),
+        endAt.headOption.map(_ => Cursor(endAt))
       )
     )
   }
