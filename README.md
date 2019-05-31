@@ -1,5 +1,5 @@
 [![CircleCI](https://circleci.com/gh/Engitano/fs2-firestore.svg?style=svg)](https://circleci.com/gh/Engitano/fs2-firestore)
-
+[![Coverage Status](https://coveralls.io/repos/github/Engitano/fs2-firestore/badge.svg)](https://coveralls.io/github/Engitano/fs2-firestore)
 # fs2 FireStore client
 
 ##### A GCP Firestore client based on [fs2](https://fs2.io/guide.html)

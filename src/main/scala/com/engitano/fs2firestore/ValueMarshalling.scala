@@ -41,7 +41,7 @@ trait FromFirestoreValue[T] {
     override def from(v: Value): UnmarshalResult[S] = self.from(v).map(f)
   }
 
-  def subflatMap[S](f: => T => UnmarshalResult[S]) = new FromFirestoreValue[S] {
+  def subflatMap[S](f: T => UnmarshalResult[S]) = new FromFirestoreValue[S] {
     override def from(v: Value): UnmarshalResult[S] = self.from(v).flatMap(f)
   }
 }
