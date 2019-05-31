@@ -10,7 +10,7 @@ Global / patchVersion := Some("0")
 
 val writeVersion = taskKey[Unit]("Writes the version to version.txt")
 writeVersion := {
-  IO.write((baseDirectory.value / "version.txt"), (`fs2-firestore`  / version).value)
+  IO.write(baseDirectory.value / "version.txt", (`fs2-firestore`  / version).value)
 }
 
 lazy val `fs2-firestore` = (project in file("."))

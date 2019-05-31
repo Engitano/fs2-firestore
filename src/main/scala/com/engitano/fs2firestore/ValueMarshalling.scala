@@ -2,6 +2,7 @@ package com.engitano.fs2firestore
 
 import java.util.UUID
 
+import cats.{Contravariant, Functor, Monad}
 import cats.implicits._
 import com.engitano.fs2firestore.ValueMarshaller.UnmarshalResult
 import com.google.firestore.v1.Value
@@ -17,7 +18,14 @@ object ToFirestoreValue {
 }
 
 trait ToFirestoreValue[T] {
+
+  self =>
+
   def to(t: T): Value
+
+  def contramap[S](f: S => T): ToFirestoreValue[S] = new ToFirestoreValue[S] {
+    override def to(s: S): Value = self.to(f(s))
+  }
 }
 
 object FromFirestoreValue {
@@ -25,7 +33,13 @@ object FromFirestoreValue {
 }
 
 trait FromFirestoreValue[T] {
+  self =>
+
   def from(v: Value): UnmarshalResult[T]
+
+  def map[S](f: T => S): FromFirestoreValue[S] = new FromFirestoreValue[S] {
+    override def from(v: Value): UnmarshalResult[S] = self.from(v).map(f)
+  }
 }
 
 trait ValueMarshaller[T]
@@ -37,7 +51,11 @@ object ValueMarshaller {
   type UnmarshalResult[T] = Either[FirestoreUnmarshallingException, T]
   type MaybeValueToT[T]   = PartialFunction[ValueTypeOneof, T]
 
-  def apply[T](implicit fm: ValueMarshaller[T]): ValueMarshaller[T] = fm
+  implicit def apply[T](implicit fm: FromFirestoreValue[T], tv: ToFirestoreValue[T]) = new ValueMarshaller[T] {
+    override def from(v: Value): UnmarshalResult[T] = fm.from(v)
+
+    override def to(t: T): Value = tv.to(t)
+  }
 
   def bimap[T](
                 tf: T => ValueTypeOneof
@@ -62,6 +80,16 @@ object ValueMarshaller {
           )
       }
   }
+
+  implicit def catsDataMonadForValueMarshaller = new Functor[FromFirestoreValue] {
+    override def map[A, B](fa: FromFirestoreValue[A])(f: A => B): FromFirestoreValue[B] = fa.map(f)
+  }
+
+  implicit def catsDataCofunctorForToFirestoreValue = new Contravariant[ToFirestoreValue] {
+    override def contramap[A, B](fa: ToFirestoreValue[A])(f: B => A): ToFirestoreValue[B] = fa.contramap(f)
+  }
+
+
 }
 
 trait LowPriorityValueMarshallers {
