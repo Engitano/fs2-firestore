@@ -24,8 +24,6 @@ lazy val `fs2-firestore` = (project in file("."))
     bintrayOrganization := Some("engitano"),
     bintrayPackageLabels := Seq("firestore", "fs2"),
     coverageExcludedPackages := "<empty>;com.google.*;",
-    coverageMinimum := 75.0,
-    coverageFailOnMinimum := true,
     Defaults.itSettings ++ headerSettings(IntegrationTest) ++ automateHeaderSettings(IntegrationTest),
     addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.9.8"),
     addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full),
