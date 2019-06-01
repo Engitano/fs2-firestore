@@ -1,5 +1,6 @@
 package com.engitano.fs2firestore.admin.v1
 
+import cats.implicits._
 import cats.effect.{ConcurrentEffect, Resource, Sync, Timer}
 import cats.implicits._
 import com.engitano.fs2firestore.{Admin, CollectionFor, FirestoreConfig}

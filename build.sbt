@@ -28,22 +28,8 @@ lazy val `fs2-firestore` = (project in file("."))
     coverageFailOnMinimum := true,
     Defaults.itSettings ++ headerSettings(IntegrationTest) ++ automateHeaderSettings(IntegrationTest),
     addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.9.8"),
-      PB.targets in Compile := Seq(
-          scalapb.gen(flatPackage = true) -> (sourceManaged in Compile).value
-      ),
-    Compile / PB.includePaths := Seq(
-      target.value / "protobuf_external",
-      baseDirectory.value / "googleapis",
-    ),
-    Compile / PB.protoSources := Seq(
-      baseDirectory.value / "googleapis" / "google" / "firestore" / "v1",
-      baseDirectory.value / "googleapis" / "google" / "firestore" / "admin" / "v1"
-    ),
-    scalapbCodeGeneratorOptions += CodeGeneratorOption.FlatPackage,
-    Compile / PB.targets := scalapbCodeGenerators.value,
     addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full),
     parallelExecution in IntegrationTest := false,
   )
-.enablePlugins(Fs2Grpc)
 
 addCommandAlias("fullBuild",";clean;coverage;test;it:test;coverageReport")

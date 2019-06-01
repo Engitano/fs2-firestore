@@ -23,8 +23,9 @@ package com.engitano.fs2firestore
 
 import java.util.UUID
 
-import cats.effect.{ConcurrentEffect, Resource, Sync}
 import cats.implicits._
+import cats.effect._
+import cats.effect.Resource._
 import com.engitano.fs2firestore.ValueMarshaller.UnmarshalResult
 import com.engitano.fs2firestore.api._
 import com.engitano.fs2firestore.queries.FieldOrder

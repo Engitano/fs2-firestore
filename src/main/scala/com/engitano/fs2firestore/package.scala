@@ -21,6 +21,7 @@
 
 package com.engitano
 
+import cats.implicits._
 import cats.effect.{ConcurrentEffect, Resource}
 import com.google.firestore.admin.v1.FirestoreAdminFs2Grpc
 import com.google.firestore.v1.{FirestoreFs2Grpc, Value}
