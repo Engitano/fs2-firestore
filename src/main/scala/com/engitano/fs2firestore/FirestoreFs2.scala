@@ -120,15 +120,10 @@ object FirestoreFs2 {
 
   import constraints._
 
-  def apply[F[_]: ConcurrentEffect](cfg: FirestoreConfig): F[FirestoreFs2Grpc[F, Metadata]] =
-    ConcurrentEffect[F].delay(Client.unsafe[F](cfg))
+  def apply[F[_]: ConcurrentEffect](cfg: FirestoreConfig) =
+    ConcurrentEffect[F].delay(Client.unsafe[F](cfg)).map(c => unsafe[F](cfg, c))
 
-  def stream[F[_]: ConcurrentEffect](cfg: FirestoreConfig): Stream[F, FirestoreFs2[F]] =
-    Stream.resource(resource[F](cfg))
-
-  def resource[F[_]: ConcurrentEffect](cfg: FirestoreConfig): Resource[F, FirestoreFs2[F]] = {
-
-    Client.resource[F](cfg).map { client =>
+  private def unsafe[F[_]: ConcurrentEffect](cfg: FirestoreConfig, client: FirestoreFs2Grpc[F, Metadata]): FirestoreFs2[F] =
       new FirestoreFs2[F] {
 
         private def metadata = new Metadata()
@@ -142,13 +137,13 @@ object FirestoreFs2 {
             }
 
         override def listDocuments[T: FromDocumentFields: CollectionFor](
-            pageSize: Option[Int] = None,
-            pageToken: Option[String] = None,
-            orderBy: Option[String] = None,
-            mask: Option[DocumentMask] = None,
-            showMissing: Boolean = false,
-            consistencySelector: ConsistencySelector = ConsistencySelector.Empty
-        ): F[Seq[UnmarshalResult[T]]] =
+                                                                          pageSize: Option[Int] = None,
+                                                                          pageToken: Option[String] = None,
+                                                                          orderBy: Option[String] = None,
+                                                                          mask: Option[DocumentMask] = None,
+                                                                          showMissing: Boolean = false,
+                                                                          consistencySelector: ConsistencySelector = ConsistencySelector.Empty
+                                                                        ): F[Seq[UnmarshalResult[T]]] =
           client
             .listDocuments(
               new ListDocumentsRequest(
@@ -279,6 +274,11 @@ object FirestoreFs2 {
           case WriteOperation.Delete(c, id)    => Write(operation = Write.Operation.Delete(cfg.documentName(c, id)))
         }
       }
-    }
+
+  def stream[F[_]: ConcurrentEffect](cfg: FirestoreConfig): Stream[F, FirestoreFs2[F]] =
+    Stream.resource(resource[F](cfg))
+
+  def resource[F[_]: ConcurrentEffect](cfg: FirestoreConfig): Resource[F, FirestoreFs2[F]] = {
+    Client.resource[F](cfg).map { client => unsafe(cfg, client) }
   }
 }
