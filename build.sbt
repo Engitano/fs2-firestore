@@ -13,6 +13,8 @@ writeVersion := {
   IO.write(baseDirectory.value / "version.txt", (`fs2-firestore`  / version).value)
 }
 
+test in publish := {}
+
 lazy val `fs2-firestore` = (project in file("."))
   .configs(IntegrationTest)
   .settings(
