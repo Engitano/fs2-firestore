@@ -12,22 +12,21 @@ object FirestoreConfig {
   private val FIRESTORE_SERVICE_ID = "firestore.googleapis.com"
 
   def local(project: String, port: Int) : FirestoreConfig =
-    new FirestoreConfig(project, s"localhost:$port", None, true)
+    FirestoreConfig(project, s"localhost:$port", None, true)
 
   def apply(project: String): FirestoreConfig =
-    new FirestoreConfig(project, FIRESTORE_SERVICE_ID,
-
+    FirestoreConfig(project, FIRESTORE_SERVICE_ID,
       Some(MoreCallCredentials.from(GoogleCredentials.getApplicationDefault)))
 
   def apply(project: String, creds: File): FirestoreConfig =
-    new FirestoreConfig(project, FIRESTORE_SERVICE_ID,
+    FirestoreConfig(project, FIRESTORE_SERVICE_ID,
       Some(MoreCallCredentials.from(GoogleCredentials.fromStream(new FileInputStream(creds)))))
 
   def apply(project: String, credentials: Credentials): FirestoreConfig =
-    new FirestoreConfig(project, FIRESTORE_SERVICE_ID, Some(MoreCallCredentials.from(credentials)))
+    FirestoreConfig(project, FIRESTORE_SERVICE_ID, Some(MoreCallCredentials.from(credentials)))
 
   def apply(project: String, credentials: CallCredentials): FirestoreConfig =
-    new FirestoreConfig(project, FIRESTORE_SERVICE_ID, Some(credentials))
+    FirestoreConfig(project, FIRESTORE_SERVICE_ID, Some(credentials))
 
 
   implicit def pathHelpersFromConfig(cfg: FirestoreConfig) = new PathHelpers(cfg)

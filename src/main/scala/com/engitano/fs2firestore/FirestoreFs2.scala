@@ -120,6 +120,9 @@ object FirestoreFs2 {
 
   import constraints._
 
+  def apply[F[_]: ConcurrentEffect](cfg: FirestoreConfig): F[FirestoreFs2Grpc[F, Metadata]] =
+    ConcurrentEffect[F].delay(Client.unsafe[F](cfg))
+
   def stream[F[_]: ConcurrentEffect](cfg: FirestoreConfig): Stream[F, FirestoreFs2[F]] =
     Stream.resource(resource[F](cfg))
 
