@@ -34,7 +34,7 @@ object FirestoreAdminFs2 {
     fs2.Stream.resource(resource[F](cfg))
 
   def resource[F[_]: ConcurrentEffect](cfg: FirestoreConfig): Resource[F, FirestoreAdminFs2[F]] =
-    Admin.create[F](cfg).map { client =>
+    Admin.resource[F](cfg).map { client =>
       new FirestoreAdminFs2[F] {
         override def createIndex[C, R <: HList, K <: HList](c: CollectionFor[C], ix: IndexDefinition): F[Unit] =
           client

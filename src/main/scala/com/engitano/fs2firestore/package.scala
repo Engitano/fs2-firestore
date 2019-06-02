@@ -34,22 +34,29 @@ package object fs2firestore {
   type DocumentFields = Map[String, Value]
 
 
-  private def buildStub[F[_]: ConcurrentEffect, A[?[_]]](cfg: FirestoreConfig)(ctr: (Channel, CallOptions) => A[F]): Resource[F, A[F]] = {
+  private def resourceStub[F[_]: ConcurrentEffect, A[?[_]]](cfg: FirestoreConfig)(ctr: (Channel, CallOptions) => A[F]): Resource[F, A[F]] = {
     type MananagedChannelResourse[A] = Resource[F, A]
 
-    val res: MananagedChannelResourse[ManagedChannel] = cfg.channelBuilder.resource[F]
+    val res: MananagedChannelResourse[ManagedChannel] = cfg.channelBuilder.resource
 
     res.map(channel => ctr(channel, cfg.callOps))
   }
 
+  private def unsafeStub[F[_]: ConcurrentEffect, A[?[_]]](cfg: FirestoreConfig)(ctr: (Channel, CallOptions) => A[F]): A[F] =
+    ctr(cfg.channelBuilder.build(), cfg.callOps)
+
   object Client {
-    def create[F[_]: ConcurrentEffect](cfg: FirestoreConfig): Resource[F, FirestoreFs2Grpc[F, io.grpc.Metadata]] =
-      buildStub[F, FirestoreFs2Grpc[?[_],io.grpc.Metadata]](cfg)((ch, o) => FirestoreFs2Grpc.stub[F](ch, o))
+    def unsafe[F[_]: ConcurrentEffect](cfg: FirestoreConfig): FirestoreFs2Grpc[F, io.grpc.Metadata] =
+      unsafeStub[F, FirestoreFs2Grpc[?[_],io.grpc.Metadata]](cfg)((ch, o) => FirestoreFs2Grpc.stub[F](ch, o))
+    def resource[F[_]: ConcurrentEffect](cfg: FirestoreConfig): Resource[F, FirestoreFs2Grpc[F, io.grpc.Metadata]] =
+      resourceStub[F, FirestoreFs2Grpc[?[_],io.grpc.Metadata]](cfg)((ch, o) => FirestoreFs2Grpc.stub[F](ch, o))
   }
 
   object Admin {
-    def create[F[_]: ConcurrentEffect](cfg: FirestoreConfig): Resource[F, FirestoreAdminFs2Grpc[F, io.grpc.Metadata]] =
-      buildStub[F, FirestoreAdminFs2Grpc[?[_],io.grpc.Metadata]](cfg)((ch, o) => FirestoreAdminFs2Grpc.stub[F](ch, o))
+    def unsafe[F[_]: ConcurrentEffect](cfg: FirestoreConfig): FirestoreAdminFs2Grpc[F, io.grpc.Metadata] =
+      unsafeStub[F, FirestoreAdminFs2Grpc[?[_],io.grpc.Metadata]](cfg)((ch, o) => FirestoreAdminFs2Grpc.stub[F](ch, o))
+    def resource[F[_]: ConcurrentEffect](cfg: FirestoreConfig): Resource[F, FirestoreAdminFs2Grpc[F, io.grpc.Metadata]] =
+      resourceStub[F, FirestoreAdminFs2Grpc[?[_],io.grpc.Metadata]](cfg)((ch, o) => FirestoreAdminFs2Grpc.stub[F](ch, o))
   }
 
   private[fs2firestore] object SymbolHelpers {

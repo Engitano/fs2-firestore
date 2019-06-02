@@ -25,7 +25,7 @@ import java.util.UUID
 
 import cats.implicits._
 import cats.effect._
-import cats.effect.Resource._
+import cats.effect.implicits._
 import com.engitano.fs2firestore.ValueMarshaller.UnmarshalResult
 import com.engitano.fs2firestore.api._
 import com.engitano.fs2firestore.queries.FieldOrder
@@ -125,7 +125,7 @@ object FirestoreFs2 {
 
   def resource[F[_]: ConcurrentEffect](cfg: FirestoreConfig): Resource[F, FirestoreFs2[F]] = {
 
-    Client.create[F](cfg).map { client =>
+    Client.resource[F](cfg).map { client =>
       new FirestoreFs2[F] {
 
         private def metadata = new Metadata()

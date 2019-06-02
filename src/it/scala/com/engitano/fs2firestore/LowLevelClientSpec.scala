@@ -65,7 +65,7 @@ class LowLevelClientSpec extends WordSpec with Matchers with DockerFirestoreServ
       val cfg        = FirestoreConfig.local(DefaultGcpProject, DefaultPubsubPort)
 
       val docId = UUID.randomUUID().toString
-      val res = Client.create[IO](cfg).use { c =>
+      val res = Client.resource[IO](cfg).use { c =>
         val doc = Document(fields = fields)
 
         val request = CreateDocumentRequest(
