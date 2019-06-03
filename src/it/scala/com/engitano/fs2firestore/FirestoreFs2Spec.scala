@@ -117,7 +117,7 @@ class FirestoreFs2Spec extends WordSpec with Matchers with DockerFirestoreServic
               IO.unit
             else
               client
-                .createIndex(CollectionFor[Person], index) <* client.waitForIndex(CollectionFor[Person],index, 250 millis,2 minutes)
+                .createIndex(CollectionFor[Person], index) *> client.waitForIndex(CollectionFor[Person],index, 250 millis,2 minutes)
           } yield f
         }
       buildIndex.unsafeRunSync()
