@@ -12,8 +12,6 @@ jobs:
       - restore_cache:
           keys:
             - ivy
-      - run: git submodule sync
-      - run: git submodule update --init
       - run:
           command: |
             echo $GCP_CREDENTIALS_64 | base64 -d > ~/fs2-firestore/gcp_creds.json

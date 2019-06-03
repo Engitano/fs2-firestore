@@ -113,12 +113,12 @@ class FirestoreFs2Spec extends WordSpec with Matchers with DockerFirestoreServic
           val index = IndexBuilder.withColumn(CollectionFor[Person], 'name).withColumn('age).build
           for {
             indexes <- client.listIndexes[Person]()
-            _ <- if (indexes.exists(_.fieldsWithout__name__.sameElements(index.fieldsWithout__name__)))
+            f <- if (indexes.exists(_.fieldsWithout__name__.sameElements(index.fieldsWithout__name__)))
               IO.unit
             else
               client
                 .createIndex(CollectionFor[Person], index) <* client.waitForIndex(CollectionFor[Person],index, 250 millis,2 minutes)
-          } yield ()
+          } yield f
         }
       buildIndex.unsafeRunSync()
 
