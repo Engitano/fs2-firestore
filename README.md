@@ -83,6 +83,7 @@ case class User(id: String, email: String, name: String, age: Option[Int], accou
       )
     }
 }
+'
 ```
 
 Still very much a WIP. Contributions welcome.
