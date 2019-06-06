@@ -33,7 +33,6 @@ package object fs2firestore {
 
   type DocumentFields = Map[String, Value]
 
-
   private def resourceStub[F[_]: Sync, A[?[_]]](cfg: FirestoreConfig)(ctr: (Channel, CallOptions) => A[F]): Resource[F, A[F]] = {
     type MananagedChannelResourse[A] = Resource[F, A]
 

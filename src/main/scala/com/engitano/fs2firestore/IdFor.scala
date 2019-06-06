@@ -28,7 +28,7 @@ import shapeless.labelled.FieldType
 import shapeless.ops.hlist.{Intersection, IsHCons, SelectAll, SelectMany}
 import shapeless.ops.record.Selector
 
-object IdFor extends LowPriorityIdFor {
+object IdFor {
 
   def apply[T](implicit n: IdFor[T]) = n
 
@@ -37,7 +37,7 @@ object IdFor extends LowPriorityIdFor {
   }
 }
 
-trait LowPriorityIdFor {
+trait IdPropertyIdForInstances {
 
   private val lowerId = Witness('id)
   private val upperId = Witness('ID)

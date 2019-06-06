@@ -23,12 +23,14 @@ package com.engitano.fs2firestore
 
 import java.util.UUID
 
+import com.engitano.fs2firestore.implicits._
+
 import org.scalatest.{Matchers, WordSpec}
 
 class IdForSpec extends WordSpec with Matchers {
   "The default implicit IdFor" should {
     "return an Id for case classes container Id properties" in {
-      import IdFor._
+
       case class LowerId(id: String)
       case class CamelId(Id: String)
       case class UpperId(ID: String)

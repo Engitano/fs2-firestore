@@ -76,7 +76,7 @@ object syntax extends ImplicitHelpers {
     }
   }
 
-  implicit def unaryToFilterInstance = new ToFilter[Unary] {
+  implicit def unaryToFilterInstance: ToFilter[Unary] = new ToFilter[Unary] {
     override def to(u: Unary): Filter = {
       val op = u.op match {
         case UnaryOp.isNull => StructuredQuery.UnaryFilter.Operator.IS_NULL
@@ -91,7 +91,7 @@ object syntax extends ImplicitHelpers {
     }
   }
 
-  implicit def compountToFilterInstance[A, B] = new ToFilter[CompoundPredicate[A, B]] {
+  implicit def compountToFilterInstance[A, B]: ToFilter[CompoundPredicate[A, B]] = new ToFilter[CompoundPredicate[A, B]] {
     override def to(c: CompoundPredicate[A, B]): Filter = {
       def buildSeq[A: ToFilter](p: A, s: Seq[Filter]): Seq[Filter] = p match {
         case cp @ CompoundPredicate(a, b) => buildSeq(a, s)(cp.filterA) ++ buildSeq(b, s)(cp.filterB)

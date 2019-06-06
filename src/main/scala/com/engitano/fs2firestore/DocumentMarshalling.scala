@@ -26,10 +26,12 @@ import com.google.firestore.v1.Value
 import com.google.firestore.v1.Value.ValueTypeOneof.MapValue
 import shapeless.{LabelledGeneric, Lazy}
 
+import com.engitano.fs2firestore.implicits._
+
 import scala.collection.immutable.Map
 
 object ToDocumentFields {
-  def apply[T](implicit t: ToDocumentFields[T]) = t
+  def apply[T](implicit t: ToDocumentFields[T]): ToDocumentFields[T] = t
 }
 
 trait ToDocumentFields[T] {
@@ -42,11 +44,11 @@ trait DocumentMarshaller[T]
 
 object DocumentMarshaller {
 
-  def apply[T](implicit dm: DocumentMarshaller[T]) = dm
+  def apply[T](implicit dm: DocumentMarshaller[T]): DocumentMarshaller[T] = dm
 }
 
 object FromDocumentFields {
-  def apply[T](implicit f: FromDocumentFields[T]) = f
+  def apply[T](implicit f: FromDocumentFields[T]): FromDocumentFields[T] = f
 }
 
 trait FromDocumentFields[T] {
@@ -55,9 +57,7 @@ trait FromDocumentFields[T] {
 
 trait LowPriorityDocumentMarshallers {
 
-  import com.engitano.fs2firestore.Marshalling._
-
-  implicit  def from[T, R](implicit lg: LabelledGeneric.Aux[T, R], vm: Lazy[ValueMarshaller[R]]) = {
+  implicit  def from[T, R](implicit lg: LabelledGeneric.Aux[T, R], vm: Lazy[ValueMarshaller[R]]): DocumentMarshaller[T] = {
     val marshaller = fromGen[T, R]
     new DocumentMarshaller[T] {
       override def from(t: Map[String, Value]): UnmarshalResult[T] =
