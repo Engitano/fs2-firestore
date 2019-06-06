@@ -1,10 +1,32 @@
+/*
+ * Copyright (c) 2019 Engitano
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy of
+ * this software and associated documentation files (the "Software"), to deal in
+ * the Software without restriction, including without limitation the rights to
+ * use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+ * the Software, and to permit persons to whom the Software is furnished to do so,
+ * subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+ * FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+ * COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+ * IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+ * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ */
+
 package com.engitano.fs2firestore
 
+import cats.syntax.option._
 import com.engitano.fs2firestore.api.Query
 import com.engitano.fs2firestore.implicits._
 import com.engitano.fs2firestore.queries.{FieldOrder, QueryBuilder}
 import com.google.firestore.v1.StructuredQuery.CompositeFilter.Operator.AND
-import com.google.firestore.v1.StructuredQuery.FieldFilter.Operator.{ARRAY_CONTAINS, EQUAL}
+import com.google.firestore.v1.StructuredQuery.FieldFilter.Operator.{ARRAY_CONTAINS, EQUAL, LESS_THAN}
 import com.google.firestore.v1.StructuredQuery.Filter.FilterType.{CompositeFilter, FieldFilter, UnaryFilter}
 import com.google.firestore.v1.StructuredQuery.{FieldReference, Filter}
 import com.google.firestore.v1.Value.ValueTypeOneof.{IntegerValue, StringValue}
@@ -12,16 +34,17 @@ import com.google.firestore.v1.{StructuredQuery, Value}
 import org.scalatest.{Matchers, WordSpec}
 import shapeless.HNil
 import shapeless.syntax.singleton._
-
 import com.engitano.fs2firestore.queries.syntax._
 
 class QuerySpec extends WordSpec with Matchers {
 
-  "QueryBuild" should {
+  case class User(id: String, email: String, name: String, age: Option[Int], accountIds: Seq[String])
+
+  "QueryBuilder" should {
     "build compile a valid query" in {
 
       val nameQuery = QueryBuilder
-        .from(CollectionFor[QueryTest])
+        .from(CollectionFor[User])
         .addOrderBy('name)
         .addOrderBy('age)
         .withStartAt(('name ->> "Alpha") :: ('age ->> Some(1)) :: HNil)
@@ -29,11 +52,12 @@ class QuerySpec extends WordSpec with Matchers {
         .where({ pb =>
           import pb._
           ('name =:= "Nugget") &&
-          ('age isNull) &&
-          ('kids contains "Iz")
+          ('age :< 18.some) &&
+          ('email isNull) &&
+          ('accountIds contains "123")
         })
 
-      nameQuery.build shouldBe Query[QueryTest](
+      nameQuery.build shouldBe Query[User](
         Some(
           Filter(
             CompositeFilter(
@@ -41,13 +65,14 @@ class QuerySpec extends WordSpec with Matchers {
                 AND,
                 List(
                   Filter(FieldFilter(StructuredQuery.FieldFilter(Some(FieldReference("name")), EQUAL, Some(Value(StringValue("Nugget")))))),
+                  Filter(FieldFilter(StructuredQuery.FieldFilter(Some(FieldReference("age")), LESS_THAN, Some(Value(IntegerValue(18)))))),
                   Filter(
                     UnaryFilter(
                       StructuredQuery
-                        .UnaryFilter(StructuredQuery.UnaryFilter.Operator.IS_NULL, StructuredQuery.UnaryFilter.OperandType.Field(FieldReference("age")))
+                        .UnaryFilter(StructuredQuery.UnaryFilter.Operator.IS_NULL, StructuredQuery.UnaryFilter.OperandType.Field(FieldReference("email")))
                     )
                   ),
-                  Filter(FieldFilter(StructuredQuery.FieldFilter(Some(FieldReference("kids")), ARRAY_CONTAINS, Some(Value(StringValue("Iz"))))))
+                  Filter(FieldFilter(StructuredQuery.FieldFilter(Some(FieldReference("accountIds")), ARRAY_CONTAINS, Some(Value(StringValue("123"))))))
                 )
               )
             )

@@ -34,11 +34,13 @@ Firestore FS2 makes heavy use of Shapeless to ensure type safety in query defini
 For examples see [QuerySpec.scala](./src/test//scala/com/engitano/fs2firestore/QuerySpec.scala)
 
 ```scala
-"QueryBuilder" should {
-    "build a valid query" in {
+case class User(id: String, email: String, name: String, age: Option[Int], accountIds: Seq[String])
+
+  "QueryBuilder" should {
+    "build compile a valid query" in {
 
       val nameQuery = QueryBuilder
-        .from(CollectionFor[QueryTest])
+        .from(CollectionFor[User])
         .addOrderBy('name)
         .addOrderBy('age)
         .withStartAt(('name ->> "Alpha") :: ('age ->> Some(1)) :: HNil)
@@ -46,11 +48,12 @@ For examples see [QuerySpec.scala](./src/test//scala/com/engitano/fs2firestore/Q
         .where({ pb =>
           import pb._
           ('name =:= "Nugget") &&
-          ('age isNull) &&
-          ('kids contains "Iz")
+          ('age :< 18.some) &&
+          ('email isNull) &&
+          ('accountIds contains "123")
         })
 
-      nameQuery.build shouldBe Query[QueryTest](
+      nameQuery.build shouldBe Query[User](
         Some(
           Filter(
             CompositeFilter(
@@ -58,13 +61,14 @@ For examples see [QuerySpec.scala](./src/test//scala/com/engitano/fs2firestore/Q
                 AND,
                 List(
                   Filter(FieldFilter(StructuredQuery.FieldFilter(Some(FieldReference("name")), EQUAL, Some(Value(StringValue("Nugget")))))),
+                  Filter(FieldFilter(StructuredQuery.FieldFilter(Some(FieldReference("age")), LESS_THAN, Some(Value(IntegerValue(18)))))),
                   Filter(
                     UnaryFilter(
                       StructuredQuery
-                        .UnaryFilter(StructuredQuery.UnaryFilter.Operator.IS_NULL, StructuredQuery.UnaryFilter.OperandType.Field(FieldReference("age")))
+                        .UnaryFilter(StructuredQuery.UnaryFilter.Operator.IS_NULL, StructuredQuery.UnaryFilter.OperandType.Field(FieldReference("email")))
                     )
                   ),
-                  Filter(FieldFilter(StructuredQuery.FieldFilter(Some(FieldReference("kids")), ARRAY_CONTAINS, Some(Value(StringValue("Iz"))))))
+                  Filter(FieldFilter(StructuredQuery.FieldFilter(Some(FieldReference("accountIds")), ARRAY_CONTAINS, Some(Value(StringValue("123"))))))
                 )
               )
             )
@@ -78,7 +82,6 @@ For examples see [QuerySpec.scala](./src/test//scala/com/engitano/fs2firestore/Q
       )
     }
   }
-
 ```
 
 Still very much a WIP. Contributions welcome.

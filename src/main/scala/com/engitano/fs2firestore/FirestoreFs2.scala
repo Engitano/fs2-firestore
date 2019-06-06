@@ -75,7 +75,7 @@ object api {
                                      offset: Option[Int],
                                      skip: Option[Int]
                                      ) {
-    def build = QueryType.StructuredQuery(
+    def build: QueryType = QueryType.StructuredQuery(
       StructuredQuery(
         None,
         Seq(StructuredQuery.CollectionSelector(CollectionFor[T].collectionName)),
@@ -84,8 +84,12 @@ object api {
           p =>
             StructuredQuery.Order(
               Some(StructuredQuery.FieldReference(p.name)),
-              if (p.isDescending) StructuredQuery.Direction.DESCENDING
-              else StructuredQuery.Direction.ASCENDING
+              if (p.isDescending) {
+                StructuredQuery.Direction.DESCENDING
+              }
+              else {
+                StructuredQuery.Direction.ASCENDING
+              }
             )
         ),
         startAt.headOption.map(_ => Cursor(startAt)),
@@ -120,9 +124,10 @@ object FirestoreFs2 {
 
   import constraints._
 
-  def apply[F[_]: ConcurrentEffect](cfg: FirestoreConfig) =
+  def apply[F[_]: ConcurrentEffect](cfg: FirestoreConfig): F[FirestoreFs2[F]] =
     ConcurrentEffect[F].delay(Client.unsafe[F](cfg)).map(c => unsafe[F](cfg, c))
 
+  //noinspection ScalaStyle
   private def unsafe[F[_]: ConcurrentEffect](cfg: FirestoreConfig, client: FirestoreFs2Grpc[F, Metadata]): FirestoreFs2[F] =
       new FirestoreFs2[F] {
 
