@@ -37,9 +37,9 @@ For examples see [QuerySpec.scala](./src/test//scala/com/engitano/fs2firestore/Q
 ```scala
 case class User(id: String, email: String, name: String, age: Option[Int], accountIds: Seq[String])
 
-  "QueryBuilder" should {
+"QueryBuilder" should {
     "build compile a valid query" in {
-
+    
       val nameQuery = QueryBuilder
         .from(CollectionFor[User])
         .addOrderBy('name)
@@ -53,7 +53,7 @@ case class User(id: String, email: String, name: String, age: Option[Int], accou
           ('email isNull) &&
           ('accountIds contains "123")
         })
-
+    
       nameQuery.build shouldBe Query[User](
         Some(
           Filter(
@@ -82,7 +82,7 @@ case class User(id: String, email: String, name: String, age: Option[Int], accou
         None
       )
     }
-  }
+}
 ```
 
 Still very much a WIP. Contributions welcome.
