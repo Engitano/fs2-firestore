@@ -90,11 +90,13 @@ class FirestoreFs2Spec extends WordSpec with Matchers with DockerFirestoreServic
     "Streams data into firestore" taggedAs whenRemoteConfigAvailable in {
       def id             = UUID.randomUUID()
       implicit val timer = IO.timer(scala.concurrent.ExecutionContext.global)
+
       val people = fs2.Stream.emits[IO, WriteOperation.Update](
         (1 to 100)
           .map(i => Person(id, "Nugget", i, None, Seq()))
           .map(p => WriteOperation.update(p))
       )
+
       val query = QueryBuilder
         .from(CollectionFor[Person])
         .where({ pb =>
@@ -107,30 +109,20 @@ class FirestoreFs2Spec extends WordSpec with Matchers with DockerFirestoreServic
         .withStartAt(('age ->> 95) :: HNil)
         .build
 
-      val buildIndex = FirestoreAdminFs2
-        .resource[IO](remoteConfig.get)
-        .use { client =>
-          val index = IndexBuilder.withColumn(CollectionFor[Person], 'name).withColumn('age).build
+      val index = IndexBuilder.withColumn(CollectionFor[Person], 'name).withColumn('age).build
+
+      val personF = (FirestoreAdminFs2.resource[IO](remoteConfig.get), FirestoreFs2.resource[IO](remoteConfig.get)).tupled.use {
+        case (admin, client) =>
           for {
-            indexes <- client.listIndexes[Person]()
-            f <- if (indexes.exists(_.fieldsWithout__name__.sameElements(index.fieldsWithout__name__)))
+            indexes <- admin.listIndexes[Person]()
+            _ <- if (indexes.exists(_.fieldsWithout__name__.sameElements(index.fieldsWithout__name__)))
               IO.unit
             else
-              client
-                .createIndex(CollectionFor[Person], index) *> client.waitForIndex(CollectionFor[Person],index, 250 millis,2 minutes)
-          } yield f
-        }
-      buildIndex.unsafeRunSync()
-
-      val personF = FirestoreFs2
-        .resource[IO](remoteConfig.get)
-        .use { client =>
-          val found = for {
-            _     <- client.write(people, 50)
-            peeps <- client.runQuery(query)
+              admin
+                .createIndex(CollectionFor[Person], index) *> admin.waitForIndex(CollectionFor[Person], index, 250 millis, 2 minutes)
+            peeps <- (client.write(people, 50) >> client.runQuery(query)).compile.toList
           } yield peeps
-          found.compile.toList
-        }
+      }
 
       val res = personF.unsafeRunSync()
 

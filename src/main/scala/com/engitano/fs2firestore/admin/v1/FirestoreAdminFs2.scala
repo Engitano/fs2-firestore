@@ -26,7 +26,7 @@ import cats.effect.{ConcurrentEffect, Resource, Sync, Timer}
 import cats.implicits._
 import com.engitano.fs2firestore.{Admin, CollectionFor, FirestoreConfig}
 import com.google.firestore.admin.v1.Index.IndexField
-import com.google.firestore.admin.v1.{CreateIndexRequest, Index, ListIndexesRequest}
+import com.google.firestore.admin.v1.{CreateIndexRequest, FirestoreAdminFs2Grpc, Index, ListIndexesRequest}
 import io.grpc.Metadata
 import shapeless.{HList, Witness}
 
@@ -51,52 +51,58 @@ object FirestoreAdminFs2 {
 
   private def metadata = new Metadata()
 
+  def apply[F[_]: ConcurrentEffect](cfg: FirestoreConfig) =
+    ConcurrentEffect[F].delay(Admin.unsafe[F](cfg)).map(c => unsafe(cfg, c))
+
+  //noinspection ScalaStyle
+  private def unsafe[F[_]: ConcurrentEffect](cfg: FirestoreConfig, client: FirestoreAdminFs2Grpc[F, Metadata]): FirestoreAdminFs2[F] = new FirestoreAdminFs2[F] {
+    override def createIndex[C, R <: HList, K <: HList](c: CollectionFor[C], ix: IndexDefinition): F[Unit] =
+      client
+        .createIndex(
+          CreateIndexRequest(
+            cfg.collectionGroupPath(c.collectionName),
+            Some(ix.toIndex)
+          ),
+          metadata
+        )
+        .as(())
+
+    override def listIndexes[T: CollectionFor](): F[Seq[IndexDefinition]] =
+      client
+        .listIndexes(ListIndexesRequest(cfg.collectionGroupPath(CollectionFor[T].collectionName)), metadata)
+        .map(_.indexes.map(_.toIndexDef))
+
+    override def waitForIndex[T](c: CollectionFor[T], indexDefinition: IndexDefinition, pollInterval: FiniteDuration, timeout: FiniteDuration)(
+      implicit T: Timer[F]
+    ): F[Unit] =
+      if (timeout.toMillis <= 0) {
+        Sync[F].raiseError(WaitForIndexTimeoutException(indexDefinition))
+      } else {
+        getIndexes(c.collectionName).flatMap { ixs =>
+          ixs.indexes
+            .find(_.toIndexDef.fieldsWithout__name__.sameElements(indexDefinition.fieldsWithout__name__))
+            .toRight(IndexNotFoundException(indexDefinition))
+            .liftTo[F]
+        } flatMap { ix =>
+          ix.state match {
+            case Index.State.READY    => Sync[F].delay(())
+            case Index.State.CREATING => T.sleep(pollInterval).flatMap(_ => waitForIndex(c, indexDefinition, pollInterval, timeout - pollInterval))
+            case s: Index.State       => Sync[F].raiseError(IndexInBadStateException(s))
+          }
+        }
+      }
+
+    private def getIndexes(collectionName: String) =
+      client.listIndexes(ListIndexesRequest(cfg.collectionGroupPath(collectionName)), metadata)
+  }
+
+
   def stream[F[_]: ConcurrentEffect](cfg: FirestoreConfig): fs2.Stream[F, FirestoreAdminFs2[F]] =
     fs2.Stream.resource(resource[F](cfg))
 
   def resource[F[_]: ConcurrentEffect](cfg: FirestoreConfig): Resource[F, FirestoreAdminFs2[F]] =
-    Admin.resource[F](cfg).map { client =>
-      new FirestoreAdminFs2[F] {
-        override def createIndex[C, R <: HList, K <: HList](c: CollectionFor[C], ix: IndexDefinition): F[Unit] =
-          client
-            .createIndex(
-              CreateIndexRequest(
-                cfg.collectionGroupPath(c.collectionName),
-                Some(ix.toIndex)
-              ),
-              metadata
-            )
-            .as(())
+    Admin.resource[F](cfg).map { client => unsafe(cfg, client) }
 
-        override def listIndexes[T: CollectionFor](): F[Seq[IndexDefinition]] =
-          client
-            .listIndexes(ListIndexesRequest(cfg.collectionGroupPath(CollectionFor[T].collectionName)), metadata)
-            .map(_.indexes.map(_.toIndexDef))
-
-        override def waitForIndex[T](c: CollectionFor[T], indexDefinition: IndexDefinition, pollInterval: FiniteDuration, timeout: FiniteDuration)(
-            implicit T: Timer[F]
-        ): F[Unit] =
-          if (timeout.toMillis <= 0) {
-            Sync[F].raiseError(WaitForIndexTimeoutException(indexDefinition))
-          } else {
-            getIndexes(c.collectionName).flatMap { ixs =>
-              ixs.indexes
-                .find(_.toIndexDef.fieldsWithout__name__.sameElements(indexDefinition.fieldsWithout__name__))
-                .toRight(IndexNotFoundException(indexDefinition))
-                .liftTo[F]
-            } flatMap { ix =>
-              ix.state match {
-                case Index.State.READY    => Sync[F].delay(())
-                case Index.State.CREATING => T.sleep(pollInterval).flatMap(_ => waitForIndex(c, indexDefinition, pollInterval, timeout - pollInterval))
-                case s: Index.State       => Sync[F].raiseError(IndexInBadStateException(s))
-              }
-            }
-          }
-
-        private def getIndexes(collectionName: String) =
-          client.listIndexes(ListIndexesRequest(cfg.collectionGroupPath(collectionName)), metadata)
-      }
-    }
 
   private implicit class PimpedIndex(ix: Index) {
     def toIndexDef = IndexDefinition(ix.fields.map(_.toIndexFieldDef))
