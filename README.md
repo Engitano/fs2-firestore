@@ -16,13 +16,14 @@ See tags for latest version
 
 ### Basic Usage
 ```scala
-      import DocumentMarshaller._
-      val id = UUID.randomUUID()
-      val testPerson = Person(id, "Nugget", None, Seq())
-      val personF = FirestoreFs2.resource[IO](FirestoreConfig.local(DefaultGcpProject, DefaultPubsubPort)).use { client =>
+      import com.engitano.fs2firestore.implicits._
+      val id          = UUID.randomUUID()
+      val testPerson  = Person(id, "Nugget", None, Seq())
+      val config      = FirestoreConfig.local(DefaultGcpProject, DefaultPubsubPort)
+      val personF     = FirestoreFs2.resource[IO](config).use { client =>
         for {
-          _ <- client.createDocument(testPerson)
-        nugget <- client.getDocument[Person](id.toString)
+          _     <- client.createDocument(testPerson)
+        nugget  <- client.getDocument[Person](id.toString)
         } yield nugget
       }
 
