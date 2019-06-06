@@ -22,7 +22,7 @@
 package com.engitano
 
 import cats.implicits._
-import cats.effect.{ConcurrentEffect, Resource}
+import cats.effect.{ConcurrentEffect, Resource, Sync}
 import com.google.firestore.admin.v1.FirestoreAdminFs2Grpc
 import com.google.firestore.v1.{FirestoreFs2Grpc, Value}
 import io.grpc.{CallOptions, Channel, ManagedChannel}
@@ -34,7 +34,7 @@ package object fs2firestore {
   type DocumentFields = Map[String, Value]
 
 
-  private def resourceStub[F[_]: ConcurrentEffect, A[?[_]]](cfg: FirestoreConfig)(ctr: (Channel, CallOptions) => A[F]): Resource[F, A[F]] = {
+  private def resourceStub[F[_]: Sync, A[?[_]]](cfg: FirestoreConfig)(ctr: (Channel, CallOptions) => A[F]): Resource[F, A[F]] = {
     type MananagedChannelResourse[A] = Resource[F, A]
 
     val res: MananagedChannelResourse[ManagedChannel] = cfg.channelBuilder.resource
@@ -42,7 +42,7 @@ package object fs2firestore {
     res.map(channel => ctr(channel, cfg.callOps))
   }
 
-  private def unsafeStub[F[_]: ConcurrentEffect, A[?[_]]](cfg: FirestoreConfig)(ctr: (Channel, CallOptions) => A[F]): A[F] =
+  private def unsafeStub[F[_]: Sync, A[?[_]]](cfg: FirestoreConfig)(ctr: (Channel, CallOptions) => A[F]): A[F] =
     ctr(cfg.channelBuilder.build(), cfg.callOps)
 
   object Client {

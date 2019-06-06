@@ -44,7 +44,7 @@ class FirestoreFs2Spec extends WordSpec with Matchers with DockerFirestoreServic
   val remoteConfig =
     (Option(System.getenv("GCP_PROJECT")), Try(new File(System.getenv("GCP_CREDENTIALS"))).toOption)
       .mapN((proj, file) => FirestoreConfig(proj, file))
-  object WhenRemoteConfigAvailable extends Tag(if (remoteConfig.isDefined) "" else classOf[Ignore].getName)
+  object whenRemoteConfigAvailable extends Tag(if (remoteConfig.isDefined) "" else classOf[Ignore].getName)
 
   implicit val contextShift: ContextShift[IO] =
     IO.contextShift(ExecutionContext.global)
@@ -87,7 +87,7 @@ class FirestoreFs2Spec extends WordSpec with Matchers with DockerFirestoreServic
       run._2.get.right.get shouldBe person.copy(name = "Fred")
     }
 
-    "Streams data into firestore" taggedAs WhenRemoteConfigAvailable in {
+    "Streams data into firestore" taggedAs whenRemoteConfigAvailable in {
       def id             = UUID.randomUUID()
       implicit val timer = IO.timer(scala.concurrent.ExecutionContext.global)
       val people = fs2.Stream.emits[IO, WriteOperation.Update](
