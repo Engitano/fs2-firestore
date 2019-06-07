@@ -54,8 +54,7 @@ trait FirestoreFs2[F[_]] {
   ): F[Seq[UnmarshalResult[T]]]
   def createDocument[T: ToDocumentFields: CollectionFor: IdFor](t: T): F[Unit]
   def putDocument[T: ToDocumentFields: CollectionFor: IdFor](t: T): F[Unit]
-  def deleteDocument(docName: String): F[Unit]
-  def deleteDocument(collection: String, docId: String): F[Unit]
+  def deleteDocument[T: CollectionFor](docId: String): F[Unit]
   def batchGetDocuments[T: FromDocumentFields: CollectionFor](docNames: List[String]): fs2.Stream[F, UnmarshalResult[T]]
   def beginTransaction(mode: TransactionOptions.Mode = TransactionOptions.Mode.Empty): F[ByteString]
   def commit(txId: ByteString, operations: Seq[WriteOperation]): F[Unit]
@@ -189,13 +188,9 @@ object FirestoreFs2 {
             )
             .as(())
 
-        override def deleteDocument(docName: String): F[Unit] =
+        override def deleteDocument[T: CollectionFor](docName: String): F[Unit] =
           client
-            .deleteDocument(DeleteDocumentRequest(docName), metadata)
-            .as(())
-
-        override def deleteDocument(collection: String, docId: String): F[Unit] =
-          deleteDocument(cfg.documentName(collection, docId))
+            .deleteDocument(DeleteDocumentRequest(cfg.documentName[F](docName)) , metadata)
             .as(())
 
         override def batchGetDocuments[T: FromDocumentFields: CollectionFor](docNames: List[String]): fs2.Stream[F, UnmarshalResult[T]] =
