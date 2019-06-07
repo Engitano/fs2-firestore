@@ -70,8 +70,32 @@ class FirestoreFs2Spec extends WordSpec with Matchers with DockerFirestoreServic
       personF.unsafeRunSync() shouldBe None
     }
 
+    "return OK when a document exists in a collection when deleting" in {
+      val id     = UUID.randomUUID()
+      val george = Person(id, "george", 30, None, Seq())
+      val personF = FirestoreFs2.resource[IO](FirestoreConfig.local(DefaultGcpProject, DefaultPubsubPort)).use { client =>
+        val getGeorge = client.getDocument[Person](id.toString)
+        for {
+          _        <- client.putDocument(george)
+          george   <- getGeorge
+          _        <- client.deleteDocument[Person](id.toString)
+          noGeorge <- getGeorge
+        } yield (george, noGeorge)
+      }
+
+      personF.unsafeRunSync() shouldBe (Some(Right(george)), None)
+    }
+
+    "return OK when no document exists in a collection when deleting" in {
+      val personF = FirestoreFs2.resource[IO](FirestoreConfig.local(DefaultGcpProject, DefaultPubsubPort)).use { client =>
+        client.deleteDocument[Person](UUID.randomUUID().toString)
+      }
+
+      personF.unsafeRunSync()
+    }
+
     "save and read and update" in {
-      val id         = UUID.randomUUID()
+      val id     = UUID.randomUUID()
       val person = Person(id, "Nugget", 30, None, Seq())
       val personF = FirestoreFs2.resource[IO](FirestoreConfig.local(DefaultGcpProject, DefaultPubsubPort)).use { client =>
         for {
@@ -135,7 +159,7 @@ class FirestoreFs2Spec extends WordSpec with Matchers with DockerFirestoreServic
     }
 
     "runs queries" in {
-      val id         = UUID.randomUUID()
+      val id     = UUID.randomUUID()
       val person = Person(id, "Nugget", 30, None, Seq())
 
       val personF = FirestoreFs2.resource[IO](FirestoreConfig.local(DefaultGcpProject, DefaultPubsubPort)).use { client =>

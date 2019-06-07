@@ -190,7 +190,7 @@ object FirestoreFs2 {
 
         override def deleteDocument[T: CollectionFor](docName: String): F[Unit] =
           client
-            .deleteDocument(DeleteDocumentRequest(cfg.documentName[F](docName)) , metadata)
+            .deleteDocument(DeleteDocumentRequest(cfg.documentName[T](docName)) , metadata)
             .as(())
 
         override def batchGetDocuments[T: FromDocumentFields: CollectionFor](docNames: List[String]): fs2.Stream[F, UnmarshalResult[T]] =
