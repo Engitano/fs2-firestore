@@ -19,7 +19,6 @@ object Dependencies {
     "io.grpc"         % "grpc-netty-shaded"                    % "1.20.0" % "it",
     "org.scalatest"   %% "scalatest"                           % "3.0.5" % "test, it",
     "com.whisk"       %% "docker-testkit-scalatest"            % "0.9.8" % "it",
-    "com.whisk"       %% "docker-testkit-impl-spotify"         % "0.9.8" % "it",
-    "com.whisk"       %% "docker-testkit-impl-docker-java"     % "0.9.8" % "it"
+    "com.whisk"       %% "docker-testkit-impl-spotify"         % "0.9.8" % "it"
   )
 }

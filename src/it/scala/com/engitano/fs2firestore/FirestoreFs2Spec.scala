@@ -115,10 +115,10 @@ class FirestoreFs2Spec extends WordSpec with Matchers with DockerFirestoreServic
       def id             = UUID.randomUUID()
       implicit val timer = IO.timer(scala.concurrent.ExecutionContext.global)
 
-      val people = fs2.Stream.emits[IO, WriteOperation.Update](
+      val people = fs2.Stream.emits[IO, WriteOperation.Put](
         (1 to 100)
           .map(i => Person(id, "Nugget", i, None, Seq()))
-          .map(p => WriteOperation.update(p))
+          .map(p => WriteOperation.put(p))
       )
 
       val query = QueryBuilder
@@ -156,6 +156,14 @@ class FirestoreFs2Spec extends WordSpec with Matchers with DockerFirestoreServic
         }
       okVals.nonEmpty shouldBe true
       okVals.forall(p => p.name == "Nugget" && p.age >= 95 && p.age < 99) shouldBe true
+    }
+
+    "create index" in {
+      val index = IndexBuilder.withColumn(CollectionFor[Person], 'name).withColumn('age).build
+      val res = FirestoreAdminFs2.resource[IO](FirestoreConfig.local(DefaultGcpProject, DefaultPubsubPort)).use { fa =>
+        fa.createIndex(CollectionFor[Person], index)
+      }
+      res.unsafeRunSync()
     }
 
     "runs queries" in {

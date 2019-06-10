@@ -6,8 +6,12 @@ if [[ -z "${FIRESTORE_PROJECT_ID}" ]]; then
   exit 1
 fi
 
+if [[ -z "${FIRESTORE_HOST_PORT}" ]]; then
+   FIRESTORE_HOST_PORT="0.0.0.0:8080"
+fi
+
 # Config gcloud project
 gcloud config set project ${FIRESTORE_PROJECT_ID}
 
 # Start emulator
-gcloud beta emulators firestore start --host-port=localhost:8080 --verbosity="debug" --project ${FIRESTORE_PROJECT_ID}
+gcloud beta emulators firestore start --host-port=$FIRESTORE_HOST_PORT --verbosity="debug" --project ${FIRESTORE_PROJECT_ID}

@@ -44,3 +44,4 @@ trait DockerFirestoreService extends DockerKit {
 
   abstract override def dockerContainers = firestore +: super.dockerContainers
 }
+

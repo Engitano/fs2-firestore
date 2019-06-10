@@ -26,6 +26,7 @@ import java.util.UUID
 import cats.implicits._
 import cats.effect._
 import cats.effect.implicits._
+import cats.~>
 import com.engitano.fs2firestore.ValueMarshaller.UnmarshalResult
 import com.engitano.fs2firestore.api._
 import com.engitano.fs2firestore.queries.FieldOrder
@@ -59,6 +60,7 @@ trait FirestoreFs2[F[_]] {
   def beginTransaction(mode: TransactionOptions.Mode = TransactionOptions.Mode.Empty): F[ByteString]
   def commit(txId: ByteString, operations: Seq[WriteOperation]): F[Unit]
   def rollback(txId: ByteString): F[Unit]
+  def transactionally(ops: F[List[WriteOperation]]): F[Unit]
   def runQuery[T: FromDocumentFields: CollectionFor](f: Query[T]): fs2.Stream[F, UnmarshalResult[T]]
   def write(request: fs2.Stream[F, WriteOperation], chunkSize: Int): fs2.Stream[F, Unit]
   def listenForDocChanges[T: FromDocumentFields](docIds: Seq[String]): fs2.Stream[F, UnmarshalResult[DocumentChanged[T]]]
@@ -100,12 +102,12 @@ object api {
   sealed trait WriteOperation
   object WriteOperation {
 
-    case class Update(collection: String, docId: String, fields: Map[String, Value]) extends WriteOperation
+    case class Put(collection: String, docId: String, fields: Map[String, Value]) extends WriteOperation
 
     case class Delete(collection: String, docId: String) extends WriteOperation
 
-    def update[T: ToDocumentFields: CollectionFor: IdFor](t: T) =
-      WriteOperation.Update(CollectionFor[T].collectionName, IdFor[T].getId(t), ToDocumentFields[T].to(t))
+    def put[T: ToDocumentFields: CollectionFor: IdFor](t: T) =
+      WriteOperation.Put(CollectionFor[T].collectionName, IdFor[T].getId(t), ToDocumentFields[T].to(t))
 
     def delete[T: CollectionFor: IdFor](t: T) =
       WriteOperation.Delete(CollectionFor[T].collectionName, IdFor[T].getId(t))
@@ -207,7 +209,7 @@ object FirestoreFs2 {
               case Some(d) => FromDocumentFields[T].from(d.fields)
             }
 
-        override def beginTransaction(mode: TransactionOptions.Mode = TransactionOptions.Mode.Empty): F[ByteString] =
+        override def beginTransaction(mode: TransactionOptions.Mode = TransactionOptions.Mode.ReadWrite(TransactionOptions.ReadWrite(ByteString.EMPTY))): F[ByteString] =
           client
             .beginTransaction(BeginTransactionRequest(cfg.database, Some(TransactionOptions(mode))), metadata)
             .map(_.transaction)
@@ -218,6 +220,17 @@ object FirestoreFs2 {
 
         override def rollback(txId: ByteString): F[Unit] =
           client.rollback(RollbackRequest(cfg.database, txId), metadata).as(())
+
+        override def transactionally(ops: F[List[WriteOperation]]): F[Unit] = {
+          beginTransaction(TransactionOptions.Mode.ReadWrite(TransactionOptions.ReadWrite(ByteString.EMPTY)))
+            .flatMap { txId =>
+              ops
+                .flatMap(w => commit(txId, w))
+                .onError {
+                  case _ => rollback(txId)
+                }
+            }
+        }
 
         override def runQuery[T: FromDocumentFields: CollectionFor](f: Query[T]): fs2.Stream[F, UnmarshalResult[T]] = {
           val q = RunQueryRequest(
@@ -270,7 +283,7 @@ object FirestoreFs2 {
           client.listCollectionIds(ListCollectionIdsRequest(cfg.rootDocuments), metadata).map(_.collectionIds)
 
         private def toWrite(wo: WriteOperation): Write = wo match {
-          case WriteOperation.Update(c, id, f) => Write(operation = Write.Operation.Update(Document(name = cfg.documentName(c, id), fields = f)))
+          case WriteOperation.Put(c, id, f) => Write(operation = Write.Operation.Update(Document(name = cfg.documentName(c, id), fields = f)))
           case WriteOperation.Delete(c, id)    => Write(operation = Write.Operation.Delete(cfg.documentName(c, id)))
         }
       }
