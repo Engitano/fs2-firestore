@@ -157,15 +157,7 @@ class FirestoreFs2Spec extends WordSpec with Matchers with DockerFirestoreServic
       okVals.nonEmpty shouldBe true
       okVals.forall(p => p.name == "Nugget" && p.age >= 95 && p.age < 99) shouldBe true
     }
-
-    "create index" in {
-      val index = IndexBuilder.withColumn(CollectionFor[Person], 'name).withColumn('age).build
-      val res = FirestoreAdminFs2.resource[IO](FirestoreConfig.local(DefaultGcpProject, DefaultPubsubPort)).use { fa =>
-        fa.createIndex(CollectionFor[Person], index)
-      }
-      res.unsafeRunSync()
-    }
-
+    
     "runs queries" in {
       val id     = UUID.randomUUID()
       val person = Person(id, "Nugget", 30, None, Seq())
