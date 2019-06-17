@@ -21,6 +21,7 @@
 
 package com.engitano.fs2firestore
 
+import java.time.{Instant, LocalDateTime, ZoneId}
 import java.util.UUID
 
 import cats.{Contravariant, Functor, Monad}
@@ -28,6 +29,7 @@ import cats.implicits._
 import com.engitano.fs2firestore.ValueMarshaller.UnmarshalResult
 import com.google.firestore.v1.Value
 import com.google.firestore.v1.Value.ValueTypeOneof
+import com.google.protobuf.timestamp.Timestamp
 import shapeless.labelled.{FieldBuilder, FieldType}
 import shapeless.{::, HList, HNil, LabelledGeneric, Lazy, Witness}
 
@@ -121,6 +123,8 @@ trait LowPriorityValueMarshallers {
 
   import Value.ValueTypeOneof._
 
+  private val utc = ZoneId.of("UTC")
+
   implicit def stringMarshaller: ValueMarshaller[String] =
     ValueMarshaller.bimap[String](s => StringValue(s)) {
       case StringValue(s) => s
@@ -144,6 +148,16 @@ trait LowPriorityValueMarshallers {
   implicit def doubleMarshaller: ValueMarshaller[Double] =
     ValueMarshaller.bimap[Double](i => DoubleValue(i)) {
       case DoubleValue(s) => s
+    }
+
+  implicit def bigDecimalMarshaller: ValueMarshaller[BigDecimal] =
+    ValueMarshaller.bimap[BigDecimal](i => DoubleValue(i.toDouble)) {
+      case DoubleValue(s) => BigDecimal(s)
+    }
+
+  implicit def localDateTimeDecimalMarshaller: ValueMarshaller[LocalDateTime] =
+    ValueMarshaller.bimap[LocalDateTime](i => TimestampValue(Timestamp(i.atZone(utc).toEpochSecond))) {
+      case IntegerValue(s) => Instant.ofEpochSecond(s).atZone(utc).toLocalDateTime
     }
 
   implicit def boolMarshaller: ValueMarshaller[Boolean] =

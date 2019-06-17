@@ -157,7 +157,7 @@ class FirestoreFs2Spec extends WordSpec with Matchers with DockerFirestoreServic
       okVals.nonEmpty shouldBe true
       okVals.forall(p => p.name == "Nugget" && p.age >= 95 && p.age < 99) shouldBe true
     }
-    
+
     "runs queries" in {
       val id     = UUID.randomUUID()
       val person = Person(id, "Nugget", 30, None, Seq())
