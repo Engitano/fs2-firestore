@@ -34,10 +34,17 @@ import scalapb.KeyValue
 import shapeless.labelled.{FieldType, KeyTag}
 import shapeless.ops.hlist.Prepend
 import shapeless.ops.hlist.Prepend._
+import shapeless.ops.hlist.Tupler
+import shapeless.ops.tuple.Collect
+import shapeless.ops.hlist.ZipWithKeys
+import shapeless.ops.record.Keys
 import shapeless.ops.record.Selector
-import shapeless.{BasisConstraint, HList, HNil, LabelledGeneric, Witness, :: => :-:}
+import shapeless.{BasisConstraint, HList, HNil, LabelledGeneric, Witness, :: => :-:, Generic}
 
 import scala.language.experimental.macros
+import shapeless.ops.hlist.Zip
+import shapeless.ops.hlist.IsHCons
+import shapeless.ops.record.Values
 
 case class FieldOrder(name: String, isDescending: Boolean)
 
@@ -87,8 +94,24 @@ case class QueryBuilder[Col: CollectionFor, ColRepr <: HList: ToFirestoreValue, 
   def withStartAt(sa: ColOrders)(implicit bc: BasisConstraint[ColOrders, ColRepr]) =
     QueryBuilder[Col, ColRepr, ColOrders, Locked](filter, order, Some(sa), endAt, offset, skip)
 
+  def withStartAt[A, Keys <: HList, Zipped <: HList](sa: A)
+    (implicit keys: Keys.Aux[ColOrders, Keys], zip: ZipWithKeys.Aux[Keys, A :-: HNil, Zipped], ev: Zipped <:< ColOrders) =
+    QueryBuilder[Col, ColRepr, ColOrders, Locked](filter, order, Some(ev(zip(sa :: HNil))), endAt, offset, skip)
+
+  def withEndAt[A, Keys <: HList, Zipped <: HList](ea: A)
+    (implicit keys: Keys.Aux[ColOrders, Keys], zip: ZipWithKeys.Aux[Keys, A :-: HNil, Zipped], ev: Zipped <:< ColOrders) =
+    QueryBuilder[Col, ColRepr, ColOrders, Locked](filter, order, startAt, Some(ev(zip(ea :: HNil))), offset, skip)
+
   def withEndAt(ea: ColOrders)(implicit bc: BasisConstraint[ColOrders, ColRepr]) =
     QueryBuilder[Col, ColRepr, ColOrders, Locked](filter, order, startAt, Some(ea), offset, skip)
+
+  def withStartAt[Tup <: Product, Repr <: HList, Keys <: HList, Zipped <: HList](sa: Tup)
+    (implicit tup: Generic.Aux[Tup, Repr], keys: Keys.Aux[ColOrders, Keys], zip: ZipWithKeys.Aux[Keys, Repr, Zipped], ev: Zipped <:< ColOrders) =
+    QueryBuilder[Col, ColRepr, ColOrders, Locked](filter, order, Some(ev(zip(tup.to(sa)))), endAt, offset, skip)
+
+  def withEndAt[Tup <: Product, Repr <: HList, Keys <: HList, Zipped <: HList](eq: Tup)
+    (implicit tup: Generic.Aux[Tup, Repr], keys: Keys.Aux[ColOrders, Keys], zip: ZipWithKeys.Aux[Keys, Repr, Zipped], ev: Zipped <:< ColOrders) =
+    QueryBuilder[Col, ColRepr, ColOrders, Locked](filter, order, startAt, Some(ev(zip(tup.to(eq)))), offset, skip)
 
   def build: Query[Col] = {
 

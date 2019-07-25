@@ -38,26 +38,26 @@ import com.engitano.fs2firestore.queries.syntax._
 
 class QuerySpec extends WordSpec with Matchers {
 
-  case class User(id: String, email: String, name: String, age: Option[Int], accountIds: Seq[String])
+  case class User(id: String, email: String, name: String, dob: Long, accountIds: Seq[String])
 
   "QueryBuilder" should {
-    "build compile a valid query" in {
+    "build compile a valid query with tupled paging" in {
 
-      val nameQuery = QueryBuilder
+      val queryByNameAndAge = QueryBuilder
         .from(CollectionFor[User])
         .addOrderBy('name)
-        .addOrderBy('age)
-        .withStartAt(('name ->> "Alpha") :: ('age ->> Some(1)) :: HNil)
-        .withEndAt(('name ->> "Zeta") :: ('age ->> Some(25)) :: HNil)
+        .addOrderBy('dob)
+        .withStartAt("Allan", 15L)
+        .withEndAt("Zeta-Jones", 95L)
         .where({ pb =>
           import pb._
           ('name =:= "Nugget") &&
-          ('age :< 18.some) &&
+          ('dob :< 18L) &&
           ('email isNull) &&
           ('accountIds contains "123")
         })
 
-      nameQuery.build shouldBe Query[User](
+      queryByNameAndAge.build shouldBe Query[User](
         Some(
           Filter(
             CompositeFilter(
@@ -65,7 +65,7 @@ class QuerySpec extends WordSpec with Matchers {
                 AND,
                 List(
                   Filter(FieldFilter(StructuredQuery.FieldFilter(Some(FieldReference("name")), EQUAL, Some(Value(StringValue("Nugget")))))),
-                  Filter(FieldFilter(StructuredQuery.FieldFilter(Some(FieldReference("age")), LESS_THAN, Some(Value(IntegerValue(18)))))),
+                  Filter(FieldFilter(StructuredQuery.FieldFilter(Some(FieldReference("dob")), LESS_THAN, Some(Value(IntegerValue(18)))))),
                   Filter(
                     UnaryFilter(
                       StructuredQuery
@@ -78,9 +78,52 @@ class QuerySpec extends WordSpec with Matchers {
             )
           )
         ),
-        Seq(FieldOrder("name", false), FieldOrder("age", false)),
-        Seq(Value(StringValue("Alpha")), Value(IntegerValue(1))),
-        Seq(Value(StringValue("Zeta")), Value(IntegerValue(25))),
+        Seq(FieldOrder("name", false), FieldOrder("dob", false)),
+        Seq(Value(StringValue("Allan")), Value(IntegerValue(15))),
+        Seq(Value(StringValue("Zeta-Jones")), Value(IntegerValue(95))),
+        None,
+        None
+      )
+    }
+    "build compile a valid query with scalar paging" in {
+
+      val queryByNameAndAge = QueryBuilder
+        .from(CollectionFor[User])
+        .addOrderBy('name, true)
+        .withStartAt("Allan")
+        .withEndAt("Zeta-Jones")
+        .where({ pb =>
+          import pb._
+          ('name =:= "Nugget") &&
+          ('dob :< 18L) &&
+          ('email isNull) &&
+          ('accountIds contains "123")
+        })
+
+      queryByNameAndAge.build shouldBe Query[User](
+        Some(
+          Filter(
+            CompositeFilter(
+              StructuredQuery.CompositeFilter(
+                AND,
+                List(
+                  Filter(FieldFilter(StructuredQuery.FieldFilter(Some(FieldReference("name")), EQUAL, Some(Value(StringValue("Nugget")))))),
+                  Filter(FieldFilter(StructuredQuery.FieldFilter(Some(FieldReference("dob")), LESS_THAN, Some(Value(IntegerValue(18)))))),
+                  Filter(
+                    UnaryFilter(
+                      StructuredQuery
+                        .UnaryFilter(StructuredQuery.UnaryFilter.Operator.IS_NULL, StructuredQuery.UnaryFilter.OperandType.Field(FieldReference("email")))
+                    )
+                  ),
+                  Filter(FieldFilter(StructuredQuery.FieldFilter(Some(FieldReference("accountIds")), ARRAY_CONTAINS, Some(Value(StringValue("123"))))))
+                )
+              )
+            )
+          )
+        ),
+        Seq(FieldOrder("name", true)),
+        Seq(Value(StringValue("Allan"))),
+        Seq(Value(StringValue("Zeta-Jones"))),
         None,
         None
       )

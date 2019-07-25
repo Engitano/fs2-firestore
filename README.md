@@ -17,13 +17,14 @@ See tags for latest version
 ### Basic Usage
 ```scala
       import com.engitano.fs2firestore.implicits._
-      val id          = UUID.randomUUID()
-      val testPerson  = Person(id, "Nugget", None, Seq())
+      val personF     = IO(UUID.randomUUID())
+                          .map(i => Person(i, "Nugget", None, Seq()))
       val config      = FirestoreConfig.local(DefaultGcpProject, DefaultPubsubPort)
       val personF     = FirestoreFs2.resource[IO](config).use { client =>
         for {
-          _     <- client.createDocument(testPerson)
-        nugget  <- client.getDocument[Person](id.toString)
+        testPerson <- personF
+          _        <- client.createDocument(testPerson)
+        nugget     <- client.getDocument[Person](id.toString)
         } yield nugget
       }
 
@@ -35,26 +36,26 @@ Firestore FS2 makes heavy use of Shapeless to ensure type safety in query defini
 For examples see [QuerySpec.scala](./src/test//scala/com/engitano/fs2firestore/QuerySpec.scala)
 
 ```scala
-case class User(id: String, email: String, name: String, age: Option[Int], accountIds: Seq[String])
+  case class User(id: String, email: String, name: String, dob: Long, accountIds: Seq[String])
 
-"QueryBuilder" should {
-    "build compile a valid query" in {
-    
-      val nameQuery = QueryBuilder
+  "QueryBuilder" should {
+    "build compile a valid query with tupled paging" in {
+
+      val queryByNameAndAge = QueryBuilder
         .from(CollectionFor[User])
         .addOrderBy('name)
-        .addOrderBy('age)
-        .withStartAt(('name ->> "Alpha") :: ('age ->> Some(1)) :: HNil)
-        .withEndAt(('name ->> "Zeta") :: ('age ->> Some(25)) :: HNil)
+        .addOrderBy('dob)
+        .withStartAt("Allan", 15L)
+        .withEndAt("Zeta-Jones", 95L)
         .where({ pb =>
           import pb._
           ('name =:= "Nugget") &&
-          ('age :< 18.some) &&
+          ('dob :< 18L) &&
           ('email isNull) &&
           ('accountIds contains "123")
         })
-    
-      nameQuery.build shouldBe Query[User](
+
+      queryByNameAndAge.build shouldBe Query[User](
         Some(
           Filter(
             CompositeFilter(
@@ -62,7 +63,7 @@ case class User(id: String, email: String, name: String, age: Option[Int], accou
                 AND,
                 List(
                   Filter(FieldFilter(StructuredQuery.FieldFilter(Some(FieldReference("name")), EQUAL, Some(Value(StringValue("Nugget")))))),
-                  Filter(FieldFilter(StructuredQuery.FieldFilter(Some(FieldReference("age")), LESS_THAN, Some(Value(IntegerValue(18)))))),
+                  Filter(FieldFilter(StructuredQuery.FieldFilter(Some(FieldReference("dob")), LESS_THAN, Some(Value(IntegerValue(18)))))),
                   Filter(
                     UnaryFilter(
                       StructuredQuery
@@ -75,14 +76,13 @@ case class User(id: String, email: String, name: String, age: Option[Int], accou
             )
           )
         ),
-        Seq(FieldOrder("name", false), FieldOrder("age", false)),
-        Seq(Value(StringValue("Alpha")), Value(IntegerValue(1))),
-        Seq(Value(StringValue("Zeta")), Value(IntegerValue(25))),
+        Seq(FieldOrder("name", false), FieldOrder("dob", false)),
+        Seq(Value(StringValue("Allan")), Value(IntegerValue(15))),
+        Seq(Value(StringValue("Zeta-Jones")), Value(IntegerValue(95))),
         None,
         None
       )
     }
-}
 
 ```
 
